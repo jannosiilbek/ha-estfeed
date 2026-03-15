@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from datetime import datetime
@@ -12,6 +13,8 @@ import aiohttp
 from .const import BASE_URL, ELERING_PRICE_URL, TOKEN_URL
 
 _LOGGER = logging.getLogger(__name__)
+
+_RATE_LIMIT_SECONDS = 6  # Estfeed API allows 1 request per 5s; add 1s buffer
 
 
 class EstfeedAuthError(Exception):
@@ -36,6 +39,16 @@ class EstfeedApiClient:
         self._client_secret = client_secret
         self._token: Optional[str] = None
         self._token_expiry: float = 0
+        self._last_request_time: float = 0
+
+    async def _throttle(self) -> None:
+        """Ensure minimum interval between Estfeed API requests."""
+        elapsed = time.monotonic() - self._last_request_time
+        if self._last_request_time > 0 and elapsed < _RATE_LIMIT_SECONDS:
+            delay = _RATE_LIMIT_SECONDS - elapsed
+            _LOGGER.debug("Rate limiter: waiting %.1fs before next request", delay)
+            await asyncio.sleep(delay)
+        self._last_request_time = time.monotonic()
 
     async def _ensure_token(self) -> str:
         """Get a valid token, refreshing if expired."""
@@ -75,6 +88,7 @@ class EstfeedApiClient:
     ) -> list[dict[str, Any]]:
         """Fetch metering point EICs linked to this API key."""
         token = await self._ensure_token()
+        await self._throttle()
         params = {
             "startDateTime": start.strftime("%Y-%m-%dT%H:%M:%SZ"),
             "endDateTime": end.strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -103,6 +117,7 @@ class EstfeedApiClient:
     ) -> list[dict[str, Any]]:
         """Fetch metering data for the given period."""
         token = await self._ensure_token()
+        await self._throttle()
         params = {
             "startDateTime": start.strftime("%Y-%m-%dT%H:%M:%SZ"),
             "endDateTime": end.strftime("%Y-%m-%dT%H:%M:%SZ"),

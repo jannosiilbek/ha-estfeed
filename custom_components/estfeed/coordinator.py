@@ -92,19 +92,6 @@ class EstfeedDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except EstfeedApiError as err:
             raise UpdateFailed(f"Failed to fetch metering data: {err}") from err
 
-        # Fetch hourly gas data for flow rate (last 2 hours to get most recent complete hour)
-        hourly_gas_data: list[dict[str, Any]] = []
-        if gas_eics:
-            try:
-                hourly_gas_data = await self.estfeed_api.get_metering_data(
-                    start=now - timedelta(hours=2),
-                    end=now,
-                    resolution="one_hour",
-                    eics=gas_eics,
-                )
-            except (EstfeedAuthError, EstfeedApiError) as err:
-                _LOGGER.warning("Failed to fetch hourly gas data for flow rate: %s", err)
-
         # Parse metering data
         today_str = now.strftime("%Y-%m-%d")
         electricity = {"daily_kwh": 0.0, "monthly_kwh": 0.0}
