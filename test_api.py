@@ -130,6 +130,51 @@ async def test_metering_data(session: aiohttp.ClientSession, token: str, eics: O
         print(f"  FAIL: {e}")
 
 
+async def test_metering_data_hourly(session: aiohttp.ClientSession, token: str, eics: Optional[list[str]] = None) -> None:
+    """Test 3b: Fetch metering data with hourly resolution for the last 24h."""
+    print("\n=== Test 3b: Metering Data (last 24h, hourly resolution) ===")
+    now = datetime.now(timezone.utc)
+    params = {
+        "startDateTime": (now - timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "endDateTime": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "resolution": "one_hour",
+    }
+    if eics:
+        params["meteringPointEics"] = ",".join(eics)
+    try:
+        async with session.get(
+            f"{BASE_URL}/api/public/v1/metering-data",
+            params=params,
+            headers={"Authorization": f"Bearer {token}"},
+        ) as resp:
+            if resp.status != 200:
+                text = await resp.text()
+                print(f"  FAIL: HTTP {resp.status} - {text}")
+                return
+            data = await resp.json()
+            print(f"  OK: Data for {len(data)} metering point(s)")
+            for mp in data:
+                eic = mp.get("meteringPointEic", "?")
+                error = mp.get("error")
+                if error:
+                    print(f"    - EIC: {eic} | ERROR: {error}")
+                    continue
+                intervals = mp.get("accountingIntervals", [])
+                print(f"    - EIC: {eic} | {len(intervals)} hourly interval(s)")
+                for interval in intervals:
+                    period = interval.get("periodStart", "?")
+                    kwh = interval.get("consumptionKwh")
+                    m3 = interval.get("consumptionM3")
+                    parts = [f"period: {period}"]
+                    if kwh is not None:
+                        parts.append(f"consumption: {kwh} kWh")
+                    if m3 is not None:
+                        parts.append(f"consumption: {m3} m³ (≈ flow rate: {m3} m³/h)")
+                    print(f"      {' | '.join(parts)}")
+    except Exception as e:
+        print(f"  FAIL: {e}")
+
+
 async def test_current_price(session: aiohttp.ClientSession) -> None:
     """Test 4: Fetch current electricity spot price from Elering."""
     print("\n=== Test 4: Current Electricity Spot Price ===")
@@ -214,6 +259,13 @@ async def main():
             # Test 3: Metering data
             eics = [mp["eic"] for mp in metering_points] if metering_points else None
             await test_metering_data(session, token, eics)
+
+            # Rate limit pause
+            print("\n  (waiting 5s for rate limit...)")
+            await asyncio.sleep(5)
+
+            # Test 3b: Hourly resolution metering data
+            await test_metering_data_hourly(session, token, eics)
 
         # Test 4: Current price (public, no auth)
         await test_current_price(session)

@@ -16,6 +16,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfEnergy, UnitOfVolume
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceEntryType
+from homeassistant.helpers.entity_registry import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -41,7 +42,7 @@ BUILDING_SENSORS: tuple[EstfeedSensorDescription, ...] = (
         name="Building Electricity Today",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.TOTAL,
+        state_class=SensorStateClass.TOTAL_INCREASING,
         suggested_display_precision=1,
         value_fn=lambda data: data["electricity"]["building_daily_kwh"],
         available_fn=lambda data: data["has_electricity"],
@@ -52,7 +53,7 @@ BUILDING_SENSORS: tuple[EstfeedSensorDescription, ...] = (
         name="Building Electricity This Month",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.TOTAL,
+        state_class=SensorStateClass.TOTAL_INCREASING,
         suggested_display_precision=1,
         value_fn=lambda data: data["electricity"]["building_monthly_kwh"],
         available_fn=lambda data: data["has_electricity"],
@@ -63,10 +64,11 @@ BUILDING_SENSORS: tuple[EstfeedSensorDescription, ...] = (
         name="Building Gas Today",
         native_unit_of_measurement=UnitOfVolume.CUBIC_METERS,
         device_class=SensorDeviceClass.GAS,
-        state_class=SensorStateClass.TOTAL,
+        state_class=SensorStateClass.TOTAL_INCREASING,
         suggested_display_precision=1,
         value_fn=lambda data: data["gas"]["building_daily_m3"],
         available_fn=lambda data: data["has_gas"],
+        entity_category=EntityCategory.DIAGNOSTIC,
         icon="mdi:fire",
     ),
     EstfeedSensorDescription(
@@ -75,10 +77,11 @@ BUILDING_SENSORS: tuple[EstfeedSensorDescription, ...] = (
         name="Building Gas This Month",
         native_unit_of_measurement=UnitOfVolume.CUBIC_METERS,
         device_class=SensorDeviceClass.GAS,
-        state_class=SensorStateClass.TOTAL,
+        state_class=SensorStateClass.TOTAL_INCREASING,
         suggested_display_precision=1,
         value_fn=lambda data: data["gas"]["building_monthly_m3"],
         available_fn=lambda data: data["has_gas"],
+        entity_category=EntityCategory.DIAGNOSTIC,
         icon="mdi:fire",
     ),
     EstfeedSensorDescription(
@@ -87,10 +90,11 @@ BUILDING_SENSORS: tuple[EstfeedSensorDescription, ...] = (
         name="Building Gas Energy Today",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.TOTAL,
+        state_class=SensorStateClass.TOTAL_INCREASING,
         suggested_display_precision=1,
         value_fn=lambda data: data["gas"]["building_daily_kwh"],
         available_fn=lambda data: data["has_gas"],
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     EstfeedSensorDescription(
         key="building_gas_energy_monthly",
@@ -98,10 +102,11 @@ BUILDING_SENSORS: tuple[EstfeedSensorDescription, ...] = (
         name="Building Gas Energy This Month",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.TOTAL,
+        state_class=SensorStateClass.TOTAL_INCREASING,
         suggested_display_precision=1,
         value_fn=lambda data: data["gas"]["building_monthly_kwh"],
         available_fn=lambda data: data["has_gas"],
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
 )
 
@@ -113,7 +118,7 @@ APARTMENT_SENSORS: tuple[EstfeedSensorDescription, ...] = (
         name="Apartment Gas Today",
         native_unit_of_measurement=UnitOfVolume.CUBIC_METERS,
         device_class=SensorDeviceClass.GAS,
-        state_class=SensorStateClass.TOTAL,
+        state_class=SensorStateClass.TOTAL_INCREASING,
         suggested_display_precision=2,
         value_fn=lambda data: data["gas"]["apartment_daily_m3"],
         available_fn=lambda data: data["has_gas"] and data["area_ratio"] > 0,
@@ -127,7 +132,7 @@ APARTMENT_SENSORS: tuple[EstfeedSensorDescription, ...] = (
         name="Apartment Gas This Month",
         native_unit_of_measurement=UnitOfVolume.CUBIC_METERS,
         device_class=SensorDeviceClass.GAS,
-        state_class=SensorStateClass.TOTAL,
+        state_class=SensorStateClass.TOTAL_INCREASING,
         suggested_display_precision=2,
         value_fn=lambda data: data["gas"]["apartment_monthly_m3"],
         available_fn=lambda data: data["has_gas"] and data["area_ratio"] > 0,
@@ -141,7 +146,7 @@ APARTMENT_SENSORS: tuple[EstfeedSensorDescription, ...] = (
         name="Apartment Gas Energy Today",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.TOTAL,
+        state_class=SensorStateClass.TOTAL_INCREASING,
         suggested_display_precision=2,
         value_fn=lambda data: data["gas"]["apartment_daily_kwh"],
         available_fn=lambda data: data["has_gas"] and data["area_ratio"] > 0,
@@ -154,7 +159,7 @@ APARTMENT_SENSORS: tuple[EstfeedSensorDescription, ...] = (
         name="Apartment Gas Energy This Month",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.TOTAL,
+        state_class=SensorStateClass.TOTAL_INCREASING,
         suggested_display_precision=2,
         value_fn=lambda data: data["gas"]["apartment_monthly_kwh"],
         available_fn=lambda data: data["has_gas"] and data["area_ratio"] > 0,
