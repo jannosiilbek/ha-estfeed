@@ -1,0 +1,53 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Estfeed",
+        "description": "Enter your Estfeed API credentials and building details.",
+        "data": {
+          "client_id": "Client ID",
+          "client_secret": "Client Secret",
+          "apartment_area_m2": "Apartment area (m²)",
+          "building_area_m2": "Total building area (m²)"
+        },
+        "data_description": {
+          "client_id": "From Estfeed portal → Account & Settings → API Key",
+          "client_secret": "The secret shown when you created the API key",
+          "apartment_area_m2": "Your apartment's area in square meters",
+          "building_area_m2": "Total area of all apartments in the building"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate Estfeed",
+        "description": "Your Estfeed credentials are no longer valid. Please enter the new client secret.",
+        "data": {
+          "client_secret": "Client Secret"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid credentials. Check your Client ID and Client Secret.",
+      "cannot_connect": "Cannot connect to Estfeed. Please try again later.",
+      "unknown": "An unexpected error occurred."
+    },
+    "abort": {
+      "already_configured": "This Estfeed account is already configured.",
+      "reauth_successful": "Re-authentication successful."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Estfeed Settings",
+        "data": {
+          "apartment_area_m2": "Apartment area (m²)",
+          "building_area_m2": "Total building area (m²)"
+        },
+        "data_description": {
+          "apartment_area_m2": "Your apartment's area in square meters",
+          "building_area_m2": "Total area of all apartments in the building"
+        }
+      }
+    }
+  }
+}

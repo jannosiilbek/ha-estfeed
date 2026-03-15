@@ -1,0 +1,10 @@
+{
+  "domain": "estfeed",
+  "name": "Estfeed Energy Data",
+  "codeowners": [],
+  "config_flow": true,
+  "documentation": "https://estfeed.elering.ee",
+  "iot_class": "cloud_polling",
+  "requirements": [],
+  "version": "1.0.0"
+}
