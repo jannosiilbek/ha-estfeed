@@ -40,6 +40,35 @@ def linear_regression(x: list[float], y: list[float]) -> tuple[float, float] | N
     return slope, intercept
 
 
+def _build_hourly_profile(gas_intervals: list[dict]) -> list[float]:
+    """Build normalized 24-hour consumption profile from raw API intervals."""
+    days: dict[str, list[dict]] = {}
+    for iv in gas_intervals:
+        day = iv["periodStart"][:10]
+        days.setdefault(day, []).append(iv)
+
+    hour_fraction_sums = [0.0] * 24
+    count = 0
+    for hours in days.values():
+        if len(hours) < 20:
+            continue
+        day_total = sum(h.get("consumptionM3", 0) for h in hours)
+        if day_total <= 0:
+            continue
+        count += 1
+        for h in hours:
+            hour = int(h["periodStart"][11:13])
+            hour_fraction_sums[hour] += h.get("consumptionM3", 0) / day_total
+
+    if count == 0:
+        return [1.0 / 24] * 24
+    profile = [s / count for s in hour_fraction_sums]
+    profile_sum = sum(profile)
+    if profile_sum <= 0:
+        return [1.0 / 24] * 24
+    return [p / profile_sum for p in profile]
+
+
 async def test_auth(session: aiohttp.ClientSession, client_id: str, client_secret: str) -> str | None:
     """Test 1: Authenticate."""
     print("\n=== Test 1: Authentication ===")
@@ -268,9 +297,17 @@ def test_estimation(gas_intervals: list[dict], temperatures: dict[datetime, floa
         if gap_temps:
             avg_gap_temp = sum(gap_temps) / len(gap_temps)
             predicted_daily = max(0, slope * avg_gap_temp + intercept)
-            estimated_gap = predicted_daily * (gap_hours / 24)
+
+            # Build hourly consumption profile
+            hourly_profile = _build_hourly_profile(gas_intervals)
+            gap_weight = 0.0
+            for h in range(gap_hours):
+                dt = (last_data_dt + timedelta(hours=h + 1)).replace(minute=0, second=0, microsecond=0)
+                gap_weight += hourly_profile[dt.hour]
+            estimated_gap = predicted_daily * gap_weight
+
             print(f"\n  Current gap: {gap_hours}h, avg temp {avg_gap_temp:.1f}°C")
-            print(f"  Estimated gap consumption: {estimated_gap:.1f} m³ (building)")
+            print(f"  Estimated gap consumption: {estimated_gap:.1f} m³ (building, hourly profile)")
         else:
             print(f"\n  No forecast temperatures available for gap period")
 

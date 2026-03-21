@@ -183,9 +183,10 @@ class EstfeedDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Estimate gap consumption and predicted daily rate
         estimated_m3 = 0.0
         predicted_daily_m3 = 0.0
+        hourly_profile: list[float] | None = None
         is_estimated = False
         if last_actual_dt and last_actual_dt < now - timedelta(hours=1):
-            estimated_m3, predicted_daily_m3 = self._estimate_gap(
+            estimated_m3, predicted_daily_m3, hourly_profile = self._estimate_gap(
                 hourly_data, temperatures, last_actual_dt, now
             )
             is_estimated = estimated_m3 > 0
@@ -200,8 +201,11 @@ class EstfeedDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         apartment_area, building_area = get_area_config(self.config_entry)
         area_ratio = apartment_area / building_area if building_area > 0 else 0
 
-        # Flow rate: predicted daily m³ / 24h, scaled to apartment
-        flow_rate = (predicted_daily_m3 / 24) * area_ratio if predicted_daily_m3 > 0 else 0
+        # Flow rate: use hourly profile for current hour, scaled to apartment
+        if predicted_daily_m3 > 0 and hourly_profile is not None:
+            flow_rate = predicted_daily_m3 * hourly_profile[now.hour] * area_ratio
+        else:
+            flow_rate = 0
 
         return _make_result(
             has_gas=True,
@@ -258,6 +262,43 @@ class EstfeedDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return total_kwh / total_m3 if total_m3 > 0 else DEFAULT_CALORIFIC_KWH_M3
 
     @staticmethod
+    def _build_hourly_profile(
+        hourly_data: list[dict[str, Any]],
+    ) -> list[float]:
+        """Build a normalized 24-hour consumption profile from historical data.
+
+        For each complete day (>= MIN_COMPLETE_DAY_HOURS hours with nonzero
+        total), compute each hour's fraction of that day's total.  Average the
+        fractions across all qualifying days and normalize to sum=1.0.
+        """
+        days: dict[str, list[dict[str, Any]]] = {}
+        for h in hourly_data:
+            day_key = h["dt"].strftime("%Y-%m-%d")
+            days.setdefault(day_key, []).append(h)
+
+        hour_fraction_sums = [0.0] * 24
+        complete_day_count = 0
+
+        for hours in days.values():
+            if len(hours) < MIN_COMPLETE_DAY_HOURS:
+                continue
+            day_total = sum(h["m3"] for h in hours)
+            if day_total <= 0:
+                continue
+            complete_day_count += 1
+            for h in hours:
+                hour_fraction_sums[h["dt"].hour] += h["m3"] / day_total
+
+        if complete_day_count == 0:
+            return [1.0 / 24] * 24
+
+        profile = [s / complete_day_count for s in hour_fraction_sums]
+        profile_sum = sum(profile)
+        if profile_sum <= 0:
+            return [1.0 / 24] * 24
+        return [p / profile_sum for p in profile]
+
+    @staticmethod
     def _build_daily_avg_temps(
         daily: dict[str, dict[str, float]],
         temperatures: dict[datetime, float],
@@ -298,13 +339,14 @@ class EstfeedDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         temperatures: dict[datetime, float],
         last_actual_dt: datetime,
         now: datetime,
-    ) -> tuple[float, float]:
+    ) -> tuple[float, float, list[float]]:
         """Estimate gas consumption for the gap between last actual data and now.
 
         Uses thermal-inertia-aware regression: weighted temperature
-        accounts for building thermal mass.
+        accounts for building thermal mass.  The gap is distributed using
+        an hourly consumption profile rather than flat pro-rating.
 
-        Returns (estimated_gap_m3, predicted_daily_m3).
+        Returns (estimated_gap_m3, predicted_daily_m3, hourly_profile).
         """
         # Build daily aggregates
         daily: dict[str, dict[str, float]] = {}
@@ -334,9 +376,11 @@ class EstfeedDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         gap_hours = max(1, int((now - last_actual_dt).total_seconds() / 3600))
 
+        profile = self._build_hourly_profile(hourly_data)
+
         regression = _linear_regression(weighted_temps, daily_m3)
         if regression is None:
-            return 0.0, 0.0
+            return 0.0, 0.0, profile
 
         slope, intercept = regression
 
@@ -350,7 +394,7 @@ class EstfeedDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 gap_temps.append(temperatures[gap_dt])
 
         if not gap_temps:
-            return 0.0, 0.0
+            return 0.0, 0.0, profile
 
         today_avg = sum(gap_temps) / len(gap_temps)
         yesterday_key = (now - timedelta(days=1)).strftime("%Y-%m-%d")
@@ -365,7 +409,15 @@ class EstfeedDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
 
         predicted_daily_m3 = max(0, slope * weighted_temp + intercept)
-        estimated = predicted_daily_m3 * (gap_hours / 24)
+
+        # Distribute using hourly consumption profile instead of flat /24
+        gap_weight = 0.0
+        for i in range(gap_hours):
+            gap_dt = (last_actual_dt + timedelta(hours=i + 1)).replace(
+                minute=0, second=0, microsecond=0
+            )
+            gap_weight += profile[gap_dt.hour]
+        estimated = predicted_daily_m3 * gap_weight
 
         _LOGGER.debug(
             "Gap estimation: %d hours, temps=[%.1f, %.1f, %.1f]°C, "
@@ -373,7 +425,7 @@ class EstfeedDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             gap_hours, today_avg, yesterday_avg, day_before_avg,
             weighted_temp, predicted_daily_m3, estimated,
         )
-        return round(estimated, 2), round(predicted_daily_m3, 2)
+        return round(estimated, 2), round(predicted_daily_m3, 2), profile
 
 
 GAS_PRICE_UPDATE_INTERVAL = 3600  # 1 hour — price changes daily
