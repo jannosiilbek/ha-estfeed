@@ -67,7 +67,7 @@ class EstfeedConfigFlow(ConfigFlow, domain=DOMAIN):
                 errors["base"] = "unknown"
             else:
                 return self.async_create_entry(
-                    title="Estfeed Energy",
+                    title="Estfeed Gas",
                     data=user_input,
                 )
 
@@ -119,7 +119,7 @@ class EstfeedConfigFlow(ConfigFlow, domain=DOMAIN):
     @callback
     def async_get_options_flow(config_entry: ConfigEntry) -> EstfeedOptionsFlow:
         """Get the options flow."""
-        return EstfeedOptionsFlow(config_entry)
+        return EstfeedOptionsFlow()
 
 
 class EstfeedOptionsFlow(OptionsFlow):
