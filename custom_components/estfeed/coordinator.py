@@ -97,6 +97,11 @@ class EstfeedDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.estfeed_api = estfeed_api
         self.weather_api = weather_api
         self.metering_points: list[dict[str, Any]] = []
+        # High-water marks prevent TOTAL_INCREASING from dropping
+        # when actuals replace an over-estimate.  Reset each month.
+        self._hwm_total_m3: float = 0.0
+        self._hwm_total_kwh: float = 0.0
+        self._hwm_month: int = 0
 
     async def _async_setup(self) -> None:
         """Fetch metering points on first setup."""
@@ -201,6 +206,20 @@ class EstfeedDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         apartment_area, building_area = get_area_config(self.config_entry)
         area_ratio = apartment_area / building_area if building_area > 0 else 0
 
+        apt_total_m3 = total_m3 * area_ratio
+        apt_total_kwh = total_kwh * area_ratio
+
+        # High-water mark: prevent TOTAL_INCREASING from dropping when
+        # actuals replace an over-estimate.  Reset on new month.
+        if now.month != self._hwm_month:
+            self._hwm_total_m3 = 0.0
+            self._hwm_total_kwh = 0.0
+            self._hwm_month = now.month
+        apt_total_m3 = max(self._hwm_total_m3, apt_total_m3)
+        apt_total_kwh = max(self._hwm_total_kwh, apt_total_kwh)
+        self._hwm_total_m3 = apt_total_m3
+        self._hwm_total_kwh = apt_total_kwh
+
         # Flow rate: use hourly profile for current hour, scaled to apartment
         if predicted_daily_m3 > 0 and hourly_profile is not None:
             flow_rate = predicted_daily_m3 * hourly_profile[now.hour] * area_ratio
@@ -211,8 +230,8 @@ class EstfeedDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             has_gas=True,
             area_ratio=area_ratio,
             is_estimated=is_estimated,
-            total_m3=total_m3 * area_ratio,
-            total_kwh=total_kwh * area_ratio,
+            total_m3=apt_total_m3,
+            total_kwh=apt_total_kwh,
             today_m3=today_m3 * area_ratio,
             flow_rate_m3h=flow_rate,
         )
