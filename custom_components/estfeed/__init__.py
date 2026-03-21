@@ -6,9 +6,13 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .api import EstfeedApiClient, GasPriceClient, OpenMeteoClient
+from .api import ElectricityPriceClient, EstfeedApiClient, GasPriceClient, OpenMeteoClient
 from .const import CONF_CLIENT_ID, CONF_CLIENT_SECRET, DOMAIN
-from .coordinator import EstfeedDataCoordinator, GasPriceCoordinator
+from .coordinator import (
+    ElectricityPriceCoordinator,
+    EstfeedDataCoordinator,
+    GasPriceCoordinator,
+)
 
 PLATFORMS = ["sensor"]
 
@@ -23,15 +27,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
     weather_api = OpenMeteoClient(session)
     gas_price_api = GasPriceClient(session)
+    electricity_price_api = ElectricityPriceClient(session)
     coordinator = EstfeedDataCoordinator(hass, entry, estfeed_api, weather_api)
     gas_price_coordinator = GasPriceCoordinator(hass, entry, gas_price_api)
+    electricity_price_coordinator = ElectricityPriceCoordinator(
+        hass, entry, electricity_price_api
+    )
 
     await coordinator.async_config_entry_first_refresh()
     await gas_price_coordinator.async_config_entry_first_refresh()
+    await electricity_price_coordinator.async_config_entry_first_refresh()
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
         "coordinator": coordinator,
         "gas_price_coordinator": gas_price_coordinator,
+        "electricity_price_coordinator": electricity_price_coordinator,
     }
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))

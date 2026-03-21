@@ -42,7 +42,12 @@
       "apartment_gas_today": { "name": "Gas today" },
       "apartment_gas_flow_rate": { "name": "Gas flow rate" },
       "apartment_gas_estimated": { "name": "Gas estimated" },
-      "gas_market_price": { "name": "Gas market price" }
+      "gas_market_price": { "name": "Gas market price" },
+      "electricity_market_price": { "name": "Electricity price" },
+      "electricity_price_today_avg": { "name": "Electricity price today average" },
+      "electricity_price_today_min": { "name": "Electricity price today minimum" },
+      "electricity_price_today_max": { "name": "Electricity price today maximum" },
+      "electricity_price_next_hour": { "name": "Electricity price next hour" }
     }
   },
   "options": {

@@ -12,12 +12,14 @@ from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import (
+    ElectricityPriceClient,
     EstfeedApiClient,
     EstfeedApiError,
     EstfeedAuthError,
     GasPriceClient,
     OpenMeteoClient,
 )
+from .const import ELECTRICITY_PRICE_UPDATE_INTERVAL
 from .const import DEFAULT_UPDATE_INTERVAL, DOMAIN, get_area_config
 
 _LOGGER = logging.getLogger(__name__)
@@ -421,4 +423,92 @@ class GasPriceCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "price_eur_mwh": round(price_eur_mwh, 3),
             "price_eur_kwh": round(price_eur_mwh / 1000, 6),
             "price_date": price_timestamp.strftime("%Y-%m-%d"),
+        }
+
+
+class ElectricityPriceCoordinator(DataUpdateCoordinator[dict[str, Any]]):
+    """Coordinator to fetch NordPool Estonia electricity prices from Elering."""
+
+    config_entry: ConfigEntry
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        config_entry: ConfigEntry,
+        electricity_price_api: ElectricityPriceClient,
+    ) -> None:
+        super().__init__(
+            hass,
+            _LOGGER,
+            name=f"{DOMAIN}_electricity_price",
+            config_entry=config_entry,
+            update_interval=timedelta(seconds=ELECTRICITY_PRICE_UPDATE_INTERVAL),
+        )
+        self.electricity_price_api = electricity_price_api
+
+    async def _async_update_data(self) -> dict[str, Any]:
+        """Fetch today's and tomorrow's electricity prices."""
+        now = datetime.now(timezone.utc)
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        tomorrow_end = today_start + timedelta(days=2)
+
+        entries = await self.electricity_price_api.get_electricity_prices(
+            start=today_start,
+            end=tomorrow_end,
+        )
+
+        if not entries:
+            raise UpdateFailed("No electricity price data available")
+
+        # Partition into today and tomorrow
+        tomorrow_start_ts = int((today_start + timedelta(days=1)).timestamp())
+        today_entries = [e for e in entries if e["timestamp"] < tomorrow_start_ts]
+        tomorrow_entries = [e for e in entries if e["timestamp"] >= tomorrow_start_ts]
+
+        # Find current price: latest entry whose timestamp <= now
+        now_ts = int(now.timestamp())
+        current_entry = None
+        for e in sorted(today_entries, key=lambda x: x["timestamp"]):
+            if e["timestamp"] <= now_ts:
+                current_entry = e
+            else:
+                break
+
+        current_price = current_entry["price"] if current_entry else today_entries[0]["price"]
+
+        # Today stats
+        today_prices = [e["price"] for e in today_entries]
+        today_avg = sum(today_prices) / len(today_prices)
+        today_min = min(today_prices)
+        today_max = max(today_prices)
+
+        # Next hour price: find entry covering now + 1 hour
+        next_hour_ts = now_ts + 3600
+        next_hour_price = None
+        for e in sorted(entries, key=lambda x: x["timestamp"]):
+            if e["timestamp"] <= next_hour_ts:
+                next_hour_price = e["price"]
+            else:
+                break
+
+        # Build price lists for attributes
+        def _format_entries(raw: list[dict[str, Any]]) -> list[dict[str, Any]]:
+            return [
+                {
+                    "start": datetime.fromtimestamp(
+                        e["timestamp"], tz=timezone.utc
+                    ).isoformat(),
+                    "price_eur_kwh": round(e["price"] / 1000, 6),
+                }
+                for e in sorted(raw, key=lambda x: x["timestamp"])
+            ]
+
+        return {
+            "current_price_eur_kwh": round(current_price / 1000, 6),
+            "today_avg_eur_kwh": round(today_avg / 1000, 6),
+            "today_min_eur_kwh": round(today_min / 1000, 6),
+            "today_max_eur_kwh": round(today_max / 1000, 6),
+            "next_hour_eur_kwh": round(next_hour_price / 1000, 6) if next_hour_price is not None else None,
+            "prices_today": _format_entries(today_entries),
+            "prices_tomorrow": _format_entries(tomorrow_entries),
         }

@@ -20,7 +20,11 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
-from .coordinator import EstfeedDataCoordinator, GasPriceCoordinator
+from .coordinator import (
+    ElectricityPriceCoordinator,
+    EstfeedDataCoordinator,
+    GasPriceCoordinator,
+)
 
 
 @dataclass(kw_only=True)
@@ -28,7 +32,55 @@ class EstfeedSensorDescription(SensorEntityDescription):
     """Describes an Estfeed sensor entity."""
 
     value_fn: Callable[[dict[str, Any]], float | bool | None]
+    attr_fn: Callable[[dict[str, Any]], dict[str, Any] | None] = lambda _: None
 
+
+ELECTRICITY_PRICE_SENSORS: tuple[EstfeedSensorDescription, ...] = (
+    EstfeedSensorDescription(
+        key="electricity_market_price",
+        translation_key="electricity_market_price",
+        native_unit_of_measurement="EUR/kWh",
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=4,
+        value_fn=lambda data: data["current_price_eur_kwh"],
+        attr_fn=lambda data: {
+            "prices_today": data["prices_today"],
+            "prices_tomorrow": data["prices_tomorrow"],
+        },
+    ),
+    EstfeedSensorDescription(
+        key="electricity_price_today_avg",
+        translation_key="electricity_price_today_avg",
+        native_unit_of_measurement="EUR/kWh",
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=4,
+        value_fn=lambda data: data["today_avg_eur_kwh"],
+    ),
+    EstfeedSensorDescription(
+        key="electricity_price_today_min",
+        translation_key="electricity_price_today_min",
+        native_unit_of_measurement="EUR/kWh",
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=4,
+        value_fn=lambda data: data["today_min_eur_kwh"],
+    ),
+    EstfeedSensorDescription(
+        key="electricity_price_today_max",
+        translation_key="electricity_price_today_max",
+        native_unit_of_measurement="EUR/kWh",
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=4,
+        value_fn=lambda data: data["today_max_eur_kwh"],
+    ),
+    EstfeedSensorDescription(
+        key="electricity_price_next_hour",
+        translation_key="electricity_price_next_hour",
+        native_unit_of_measurement="EUR/kWh",
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=4,
+        value_fn=lambda data: data["next_hour_eur_kwh"],
+    ),
+)
 
 GAS_PRICE_SENSORS: tuple[EstfeedSensorDescription, ...] = (
     EstfeedSensorDescription(
@@ -96,13 +148,18 @@ async def async_setup_entry(
     data = hass.data[DOMAIN][entry.entry_id]
     coordinator: EstfeedDataCoordinator = data["coordinator"]
     gas_price_coordinator: GasPriceCoordinator = data["gas_price_coordinator"]
+    elec_price_coordinator: ElectricityPriceCoordinator = data["electricity_price_coordinator"]
 
-    entities: list[EstfeedSensor | GasPriceSensor] = [
+    entities: list[SensorEntity] = [
         EstfeedSensor(coordinator, entry, desc) for desc in SENSORS
     ]
     entities.extend(
         GasPriceSensor(gas_price_coordinator, entry, desc)
         for desc in GAS_PRICE_SENSORS
+    )
+    entities.extend(
+        ElectricityPriceSensor(elec_price_coordinator, entry, desc)
+        for desc in ELECTRICITY_PRICE_SENSORS
     )
     async_add_entities(entities)
 
@@ -147,6 +204,49 @@ class EstfeedSensor(CoordinatorEntity[EstfeedDataCoordinator], SensorEntity):
         except (KeyError, TypeError):
             return None
 
+
+class ElectricityPriceSensor(CoordinatorEntity[ElectricityPriceCoordinator], SensorEntity):
+    """Representation of an electricity market price sensor."""
+
+    entity_description: EstfeedSensorDescription
+    _attr_has_entity_name = True
+
+    def __init__(
+        self,
+        coordinator: ElectricityPriceCoordinator,
+        entry: ConfigEntry,
+        description: EstfeedSensorDescription,
+    ) -> None:
+        super().__init__(coordinator)
+        self.entity_description = description
+        self._attr_unique_id = f"{entry.entry_id}_{description.key}"
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, f"{entry.entry_id}_electricity_price")},
+            "name": "Electricity Market Price",
+            "manufacturer": "Elering",
+            "model": "Nord Pool EE",
+            "entry_type": DeviceEntryType.SERVICE,
+        }
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the sensor value."""
+        if self.coordinator.data is None:
+            return None
+        try:
+            return self.entity_description.value_fn(self.coordinator.data)
+        except (KeyError, TypeError):
+            return None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Return extra state attributes (price lists)."""
+        if self.coordinator.data is None:
+            return None
+        try:
+            return self.entity_description.attr_fn(self.coordinator.data)
+        except (KeyError, TypeError):
+            return None
 
 class GasPriceSensor(CoordinatorEntity[GasPriceCoordinator], SensorEntity):
     """Representation of a gas market price sensor."""

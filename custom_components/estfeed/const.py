@@ -17,6 +17,8 @@ TOKEN_URL = "https://kc.elering.ee/realms/elering-sso/protocol/openid-connect/to
 BASE_URL = "https://estfeed.elering.ee"
 OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
 GAS_PRICE_URL = "https://dashboard.elering.ee/api/gas-trade"
+ELECTRICITY_PRICE_URL = "https://dashboard.elering.ee/api/nps/price"
+ELECTRICITY_PRICE_UPDATE_INTERVAL = 900  # 15 minutes — matches price block resolution
 
 API_DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 

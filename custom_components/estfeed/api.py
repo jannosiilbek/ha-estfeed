@@ -10,7 +10,14 @@ from typing import Any
 
 import aiohttp
 
-from .const import API_DATETIME_FORMAT, BASE_URL, GAS_PRICE_URL, OPEN_METEO_URL, TOKEN_URL
+from .const import (
+    API_DATETIME_FORMAT,
+    BASE_URL,
+    ELECTRICITY_PRICE_URL,
+    GAS_PRICE_URL,
+    OPEN_METEO_URL,
+    TOKEN_URL,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -174,6 +181,46 @@ class GasPriceClient:
                 ]
         except aiohttp.ClientError as err:
             _LOGGER.warning("Failed to fetch gas price: %s", err)
+            return []
+
+
+class ElectricityPriceClient:
+    """Client for the Elering NPS electricity price API (public, no auth)."""
+
+    def __init__(self, session: aiohttp.ClientSession) -> None:
+        self._session = session
+
+    async def get_electricity_prices(
+        self,
+        start: datetime,
+        end: datetime,
+    ) -> list[dict[str, Any]]:
+        """Fetch electricity prices for the given period.
+
+        Returns list of {timestamp: int, price: float} for Estonia (EE).
+        Prices are in EUR/MWh, 15-minute resolution.
+        """
+        params = {
+            "start": start.strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+            "end": end.strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+        }
+        try:
+            async with self._session.get(
+                ELECTRICITY_PRICE_URL, params=params
+            ) as resp:
+                if resp.status != 200:
+                    _LOGGER.warning("Electricity price API returned %s", resp.status)
+                    return []
+                data = await resp.json()
+                if not data.get("success"):
+                    return []
+                return [
+                    entry
+                    for entry in data.get("data", {}).get("ee", [])
+                    if entry.get("price") is not None
+                ]
+        except aiohttp.ClientError as err:
+            _LOGGER.warning("Failed to fetch electricity price: %s", err)
             return []
 
 
