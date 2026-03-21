@@ -1,4 +1,4 @@
-"""Estfeed Energy Data integration."""
+"""Estfeed Gas integration."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .api import EleringPriceClient, EstfeedApiClient
+from .api import EstfeedApiClient, OpenMeteoClient
 from .const import CONF_CLIENT_ID, CONF_CLIENT_SECRET, DOMAIN
 from .coordinator import EstfeedDataCoordinator
 
@@ -25,8 +25,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         entry.data[CONF_CLIENT_ID],
         entry.data[CONF_CLIENT_SECRET],
     )
-    price_api = EleringPriceClient(session)
-    coordinator = EstfeedDataCoordinator(hass, entry, estfeed_api, price_api)
+    weather_api = OpenMeteoClient(session)
+    coordinator = EstfeedDataCoordinator(hass, entry, estfeed_api, weather_api)
 
     await coordinator.async_config_entry_first_refresh()
 

@@ -1,5 +1,9 @@
 """Constants for the Estfeed integration."""
 
+from __future__ import annotations
+
+from homeassistant.config_entries import ConfigEntry
+
 DOMAIN = "estfeed"
 
 CONF_CLIENT_ID = "client_id"
@@ -11,4 +15,17 @@ DEFAULT_UPDATE_INTERVAL = 3600  # 1 hour
 
 TOKEN_URL = "https://kc.elering.ee/realms/elering-sso/protocol/openid-connect/token"
 BASE_URL = "https://estfeed.elering.ee"
-ELERING_PRICE_URL = "https://dashboard.elering.ee/api/nps/price"
+OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
+
+API_DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
+
+
+def get_area_config(entry: ConfigEntry) -> tuple[float, float]:
+    """Get apartment and building area from config entry (options take precedence)."""
+    apartment = entry.options.get(
+        CONF_APARTMENT_AREA, entry.data.get(CONF_APARTMENT_AREA, 0)
+    )
+    building = entry.options.get(
+        CONF_BUILDING_AREA, entry.data.get(CONF_BUILDING_AREA, 0)
+    )
+    return apartment, building

@@ -18,6 +18,7 @@ from .const import (
     CONF_CLIENT_ID,
     CONF_CLIENT_SECRET,
     DOMAIN,
+    get_area_config,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -124,9 +125,6 @@ class EstfeedConfigFlow(ConfigFlow, domain=DOMAIN):
 class EstfeedOptionsFlow(OptionsFlow):
     """Handle options for Estfeed."""
 
-    def __init__(self, config_entry: ConfigEntry) -> None:
-        self._config_entry = config_entry
-
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -134,14 +132,7 @@ class EstfeedOptionsFlow(OptionsFlow):
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
-        current_apartment = self._config_entry.options.get(
-            CONF_APARTMENT_AREA,
-            self._config_entry.data.get(CONF_APARTMENT_AREA, 0),
-        )
-        current_building = self._config_entry.options.get(
-            CONF_BUILDING_AREA,
-            self._config_entry.data.get(CONF_BUILDING_AREA, 0),
-        )
+        current_apartment, current_building = get_area_config(self.config_entry)
 
         return self.async_show_form(
             step_id="init",

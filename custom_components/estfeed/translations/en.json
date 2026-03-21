@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Connect to Estfeed",
-        "description": "Enter your Estfeed API credentials and building details.",
+        "description": "Enter your Estfeed API credentials and building details for gas consumption tracking.",
         "data": {
           "client_id": "Client ID",
           "client_secret": "Client Secret",
@@ -33,6 +33,15 @@
     "abort": {
       "already_configured": "This Estfeed account is already configured.",
       "reauth_successful": "Re-authentication successful."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "apartment_gas_total": { "name": "Gas this month" },
+      "apartment_gas_energy_total": { "name": "Gas energy this month" },
+      "apartment_gas_today": { "name": "Gas today" },
+      "apartment_gas_flow_rate": { "name": "Gas flow rate" },
+      "apartment_gas_estimated": { "name": "Gas estimated" }
     }
   },
   "options": {

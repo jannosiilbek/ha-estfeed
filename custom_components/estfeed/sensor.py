@@ -1,10 +1,10 @@
-"""Sensor entities for Estfeed integration."""
+"""Sensor entities for Estfeed gas integration."""
 
 from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -13,10 +13,9 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfEnergy, UnitOfVolume
+from homeassistant.const import UnitOfEnergy, UnitOfVolume, UnitOfVolumeFlowRate
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceEntryType
-from homeassistant.helpers.entity_registry import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -28,169 +27,51 @@ from .coordinator import EstfeedDataCoordinator
 class EstfeedSensorDescription(SensorEntityDescription):
     """Describes an Estfeed sensor entity."""
 
-    value_fn: Callable[[dict[str, Any]], Optional[float]]
-    available_fn: Callable[[dict[str, Any]], bool] = lambda data: True
-    device_name: str = "Building Energy"
-    device_id_suffix: str = "building"
+    value_fn: Callable[[dict[str, Any]], float | bool | None]
 
 
-# Building sensors
-BUILDING_SENSORS: tuple[EstfeedSensorDescription, ...] = (
+SENSORS: tuple[EstfeedSensorDescription, ...] = (
     EstfeedSensorDescription(
-        key="building_electricity_daily",
-        translation_key="building_electricity_daily",
-        name="Building Electricity Today",
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.TOTAL_INCREASING,
-        suggested_display_precision=1,
-        value_fn=lambda data: data["electricity"]["building_daily_kwh"],
-        available_fn=lambda data: data["has_electricity"],
-    ),
-    EstfeedSensorDescription(
-        key="building_electricity_monthly",
-        translation_key="building_electricity_monthly",
-        name="Building Electricity This Month",
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.TOTAL_INCREASING,
-        suggested_display_precision=1,
-        value_fn=lambda data: data["electricity"]["building_monthly_kwh"],
-        available_fn=lambda data: data["has_electricity"],
-    ),
-    EstfeedSensorDescription(
-        key="building_gas_daily",
-        translation_key="building_gas_daily",
-        name="Building Gas Today",
-        native_unit_of_measurement=UnitOfVolume.CUBIC_METERS,
-        device_class=SensorDeviceClass.GAS,
-        state_class=SensorStateClass.TOTAL_INCREASING,
-        suggested_display_precision=1,
-        value_fn=lambda data: data["gas"]["building_daily_m3"],
-        available_fn=lambda data: data["has_gas"],
-        entity_category=EntityCategory.DIAGNOSTIC,
-        icon="mdi:fire",
-    ),
-    EstfeedSensorDescription(
-        key="building_gas_monthly",
-        translation_key="building_gas_monthly",
-        name="Building Gas This Month",
-        native_unit_of_measurement=UnitOfVolume.CUBIC_METERS,
-        device_class=SensorDeviceClass.GAS,
-        state_class=SensorStateClass.TOTAL_INCREASING,
-        suggested_display_precision=1,
-        value_fn=lambda data: data["gas"]["building_monthly_m3"],
-        available_fn=lambda data: data["has_gas"],
-        entity_category=EntityCategory.DIAGNOSTIC,
-        icon="mdi:fire",
-    ),
-    EstfeedSensorDescription(
-        key="building_gas_energy_daily",
-        translation_key="building_gas_energy_daily",
-        name="Building Gas Energy Today",
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.TOTAL_INCREASING,
-        suggested_display_precision=1,
-        value_fn=lambda data: data["gas"]["building_daily_kwh"],
-        available_fn=lambda data: data["has_gas"],
-        entity_category=EntityCategory.DIAGNOSTIC,
-    ),
-    EstfeedSensorDescription(
-        key="building_gas_energy_monthly",
-        translation_key="building_gas_energy_monthly",
-        name="Building Gas Energy This Month",
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.TOTAL_INCREASING,
-        suggested_display_precision=1,
-        value_fn=lambda data: data["gas"]["building_monthly_kwh"],
-        available_fn=lambda data: data["has_gas"],
-        entity_category=EntityCategory.DIAGNOSTIC,
-    ),
-)
-
-# Apartment sensors
-APARTMENT_SENSORS: tuple[EstfeedSensorDescription, ...] = (
-    EstfeedSensorDescription(
-        key="apartment_gas_daily",
-        translation_key="apartment_gas_daily",
-        name="Apartment Gas Today",
+        key="apartment_gas_total",
+        translation_key="apartment_gas_total",
         native_unit_of_measurement=UnitOfVolume.CUBIC_METERS,
         device_class=SensorDeviceClass.GAS,
         state_class=SensorStateClass.TOTAL_INCREASING,
         suggested_display_precision=2,
-        value_fn=lambda data: data["gas"]["apartment_daily_m3"],
-        available_fn=lambda data: data["has_gas"] and data["area_ratio"] > 0,
-        device_name="Apartment Energy",
-        device_id_suffix="apartment",
-        icon="mdi:fire",
+        value_fn=lambda data: data["gas"]["apartment_total_m3"],
     ),
     EstfeedSensorDescription(
-        key="apartment_gas_monthly",
-        translation_key="apartment_gas_monthly",
-        name="Apartment Gas This Month",
+        key="apartment_gas_energy_total",
+        translation_key="apartment_gas_energy_total",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        suggested_display_precision=2,
+        value_fn=lambda data: data["gas"]["apartment_total_kwh"],
+    ),
+    EstfeedSensorDescription(
+        key="apartment_gas_today",
+        translation_key="apartment_gas_today",
         native_unit_of_measurement=UnitOfVolume.CUBIC_METERS,
         device_class=SensorDeviceClass.GAS,
-        state_class=SensorStateClass.TOTAL_INCREASING,
+        state_class=SensorStateClass.TOTAL,
         suggested_display_precision=2,
-        value_fn=lambda data: data["gas"]["apartment_monthly_m3"],
-        available_fn=lambda data: data["has_gas"] and data["area_ratio"] > 0,
-        device_name="Apartment Energy",
-        device_id_suffix="apartment",
-        icon="mdi:fire",
+        value_fn=lambda data: data["gas"]["apartment_today_m3"],
     ),
     EstfeedSensorDescription(
-        key="apartment_gas_energy_daily",
-        translation_key="apartment_gas_energy_daily",
-        name="Apartment Gas Energy Today",
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.TOTAL_INCREASING,
-        suggested_display_precision=2,
-        value_fn=lambda data: data["gas"]["apartment_daily_kwh"],
-        available_fn=lambda data: data["has_gas"] and data["area_ratio"] > 0,
-        device_name="Apartment Energy",
-        device_id_suffix="apartment",
-    ),
-    EstfeedSensorDescription(
-        key="apartment_gas_energy_monthly",
-        translation_key="apartment_gas_energy_monthly",
-        name="Apartment Gas Energy This Month",
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.TOTAL_INCREASING,
-        suggested_display_precision=2,
-        value_fn=lambda data: data["gas"]["apartment_monthly_kwh"],
-        available_fn=lambda data: data["has_gas"] and data["area_ratio"] > 0,
-        device_name="Apartment Energy",
-        device_id_suffix="apartment",
-    ),
-    EstfeedSensorDescription(
-        key="electricity_spot_price",
-        translation_key="electricity_spot_price",
-        name="Electricity Spot Price",
-        native_unit_of_measurement="EUR/kWh",
-        device_class=SensorDeviceClass.MONETARY,
+        key="apartment_gas_flow_rate",
+        translation_key="apartment_gas_flow_rate",
+        native_unit_of_measurement=UnitOfVolumeFlowRate.CUBIC_METERS_PER_HOUR,
+        device_class=SensorDeviceClass.VOLUME_FLOW_RATE,
         state_class=SensorStateClass.MEASUREMENT,
-        suggested_display_precision=4,
-        value_fn=lambda data: data["price"]["electricity_spot_eur_kwh"],
-        device_name="Apartment Energy",
-        device_id_suffix="apartment",
-        icon="mdi:currency-eur",
+        suggested_display_precision=3,
+        value_fn=lambda data: data["gas"]["apartment_flow_rate_m3h"],
     ),
     EstfeedSensorDescription(
-        key="electricity_avg_price",
-        translation_key="electricity_avg_price",
-        name="Electricity Avg Price This Month",
-        native_unit_of_measurement="EUR/kWh",
-        device_class=SensorDeviceClass.MONETARY,
-        state_class=SensorStateClass.MEASUREMENT,
-        suggested_display_precision=4,
-        value_fn=lambda data: data["price"]["electricity_avg_eur_kwh"],
-        device_name="Apartment Energy",
-        device_id_suffix="apartment",
-        icon="mdi:currency-eur",
+        key="apartment_gas_estimated",
+        translation_key="apartment_gas_estimated",
+        value_fn=lambda data: data["is_estimated"],
+        entity_registry_enabled_default=False,
     ),
 )
 
@@ -202,20 +83,13 @@ async def async_setup_entry(
 ) -> None:
     """Set up Estfeed sensors from a config entry."""
     coordinator: EstfeedDataCoordinator = hass.data[DOMAIN][entry.entry_id]
-
-    entities: list[EstfeedSensor] = []
-
-    for description in BUILDING_SENSORS:
-        entities.append(EstfeedSensor(coordinator, entry, description))
-
-    for description in APARTMENT_SENSORS:
-        entities.append(EstfeedSensor(coordinator, entry, description))
-
-    async_add_entities(entities)
+    async_add_entities(
+        EstfeedSensor(coordinator, entry, desc) for desc in SENSORS
+    )
 
 
 class EstfeedSensor(CoordinatorEntity[EstfeedDataCoordinator], SensorEntity):
-    """Representation of an Estfeed sensor."""
+    """Representation of an Estfeed gas sensor."""
 
     entity_description: EstfeedSensorDescription
     _attr_has_entity_name = True
@@ -230,8 +104,8 @@ class EstfeedSensor(CoordinatorEntity[EstfeedDataCoordinator], SensorEntity):
         self.entity_description = description
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
         self._attr_device_info = {
-            "identifiers": {(DOMAIN, f"{entry.entry_id}_{description.device_id_suffix}")},
-            "name": description.device_name,
+            "identifiers": {(DOMAIN, f"{entry.entry_id}_apartment")},
+            "name": "Apartment Gas",
             "manufacturer": "Elering",
             "model": "Estfeed",
             "entry_type": DeviceEntryType.SERVICE,
@@ -240,14 +114,12 @@ class EstfeedSensor(CoordinatorEntity[EstfeedDataCoordinator], SensorEntity):
     @property
     def available(self) -> bool:
         """Return if entity is available."""
-        if not super().available:
+        if not super().available or self.coordinator.data is None:
             return False
-        if self.coordinator.data is None:
-            return False
-        return self.entity_description.available_fn(self.coordinator.data)
+        return self.coordinator.data.get("has_gas", False)
 
     @property
-    def native_value(self) -> Optional[float]:
+    def native_value(self) -> float | bool | None:
         """Return the sensor value."""
         if self.coordinator.data is None:
             return None

@@ -1,16 +1,16 @@
-"""API clients for Estfeed metering data and Elering electricity prices."""
+"""API clients for Estfeed metering data and Open-Meteo weather."""
 
 from __future__ import annotations
 
 import asyncio
 import logging
 import time
-from datetime import datetime
-from typing import Any, Optional
+from datetime import datetime, timezone
+from typing import Any
 
 import aiohttp
 
-from .const import BASE_URL, ELERING_PRICE_URL, TOKEN_URL
+from .const import API_DATETIME_FORMAT, BASE_URL, OPEN_METEO_URL, TOKEN_URL
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -37,9 +37,19 @@ class EstfeedApiClient:
         self._session = session
         self._client_id = client_id
         self._client_secret = client_secret
-        self._token: Optional[str] = None
+        self._token: str | None = None
         self._token_expiry: float = 0
         self._last_request_time: float = 0
+
+    async def _check_response(
+        self, resp: aiohttp.ClientResponse, context: str
+    ) -> None:
+        """Raise appropriate errors for non-200 responses."""
+        if resp.status in (401, 403):
+            raise EstfeedAuthError("Authentication failed")
+        if resp.status != 200:
+            text = await resp.text()
+            raise EstfeedApiError(f"{context}: {resp.status} {text}")
 
     async def _throttle(self) -> None:
         """Ensure minimum interval between Estfeed API requests."""
@@ -65,11 +75,7 @@ class EstfeedApiClient:
                 },
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
             ) as resp:
-                if resp.status in (401, 403):
-                    raise EstfeedAuthError("Invalid credentials")
-                if resp.status != 200:
-                    text = await resp.text()
-                    raise EstfeedApiError(f"Token request failed: {resp.status} {text}")
+                await self._check_response(resp, "Token request failed")
                 data = await resp.json()
                 token: str = data["access_token"]
                 self._token = token
@@ -90,8 +96,8 @@ class EstfeedApiClient:
         token = await self._ensure_token()
         await self._throttle()
         params = {
-            "startDateTime": start.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "endDateTime": end.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "startDateTime": start.strftime(API_DATETIME_FORMAT),
+            "endDateTime": end.strftime(API_DATETIME_FORMAT),
         }
         try:
             async with self._session.get(
@@ -99,11 +105,7 @@ class EstfeedApiClient:
                 params=params,
                 headers={"Authorization": f"Bearer {token}"},
             ) as resp:
-                if resp.status in (401, 403):
-                    raise EstfeedAuthError("Authentication failed")
-                if resp.status != 200:
-                    text = await resp.text()
-                    raise EstfeedApiError(f"Metering points request failed: {resp.status} {text}")
+                await self._check_response(resp, "Metering points request failed")
                 return await resp.json()
         except aiohttp.ClientError as err:
             raise EstfeedApiError(f"Connection error: {err}") from err
@@ -112,15 +114,15 @@ class EstfeedApiClient:
         self,
         start: datetime,
         end: datetime,
-        resolution: str = "one_day",
-        eics: Optional[list[str]] = None,
+        resolution: str = "one_hour",
+        eics: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """Fetch metering data for the given period."""
         token = await self._ensure_token()
         await self._throttle()
         params = {
-            "startDateTime": start.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "endDateTime": end.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "startDateTime": start.strftime(API_DATETIME_FORMAT),
+            "endDateTime": end.strftime(API_DATETIME_FORMAT),
             "resolution": resolution,
         }
         if eics:
@@ -132,57 +134,52 @@ class EstfeedApiClient:
                 params=params,
                 headers={"Authorization": f"Bearer {token}"},
             ) as resp:
-                if resp.status in (401, 403):
-                    raise EstfeedAuthError("Authentication failed")
-                if resp.status != 200:
-                    text = await resp.text()
-                    raise EstfeedApiError(f"Metering data request failed: {resp.status} {text}")
+                await self._check_response(resp, "Metering data request failed")
                 return await resp.json()
         except aiohttp.ClientError as err:
             raise EstfeedApiError(f"Connection error: {err}") from err
 
 
-class EleringPriceClient:
-    """Client for the public Elering NordPool electricity price API."""
+class OpenMeteoClient:
+    """Client for the Open-Meteo weather API (free, no auth)."""
 
     def __init__(self, session: aiohttp.ClientSession) -> None:
         self._session = session
 
-    async def get_current_price(self) -> Optional[float]:
-        """Get the current hour electricity spot price in EUR/MWh."""
-        try:
-            async with self._session.get(
-                f"{ELERING_PRICE_URL}/EE/current"
-            ) as resp:
-                if resp.status != 200:
-                    _LOGGER.warning("Elering price API returned %s", resp.status)
-                    return None
-                data = await resp.json()
-                prices = data.get("data", [])
-                if prices:
-                    return prices[0].get("price")
-                return None
-        except aiohttp.ClientError as err:
-            _LOGGER.warning("Failed to fetch electricity price: %s", err)
-            return None
+    async def get_hourly_temperatures(
+        self,
+        latitude: float,
+        longitude: float,
+        past_days: int = 7,
+        forecast_days: int = 1,
+    ) -> dict[datetime, float]:
+        """Fetch hourly temperatures for the given location.
 
-    async def get_prices(
-        self, start: datetime, end: datetime
-    ) -> list[dict[str, Any]]:
-        """Get historical prices for Estonia. Returns list of {timestamp, price} in EUR/MWh."""
+        Returns a dict mapping UTC datetime -> temperature in °C.
+        """
         params = {
-            "start": start.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "end": end.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "latitude": latitude,
+            "longitude": longitude,
+            "hourly": "temperature_2m",
+            "past_days": past_days,
+            "forecast_days": forecast_days,
+            "timeformat": "iso8601",
+            "timezone": "UTC",
         }
         try:
-            async with self._session.get(
-                ELERING_PRICE_URL, params=params
-            ) as resp:
+            async with self._session.get(OPEN_METEO_URL, params=params) as resp:
                 if resp.status != 200:
-                    _LOGGER.warning("Elering price API returned %s", resp.status)
-                    return []
+                    _LOGGER.warning("Open-Meteo API returned %s", resp.status)
+                    return {}
                 data = await resp.json()
-                return data.get("data", {}).get("ee", [])
+                times = data.get("hourly", {}).get("time", [])
+                temps = data.get("hourly", {}).get("temperature_2m", [])
+                result: dict[datetime, float] = {}
+                for t, temp in zip(times, temps):
+                    if temp is not None:
+                        dt = datetime.fromisoformat(t).replace(tzinfo=timezone.utc)
+                        result[dt] = temp
+                return result
         except aiohttp.ClientError as err:
-            _LOGGER.warning("Failed to fetch electricity prices: %s", err)
-            return []
+            _LOGGER.warning("Failed to fetch weather data: %s", err)
+            return {}
