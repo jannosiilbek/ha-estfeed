@@ -15,6 +15,7 @@ from .api import (
     EstfeedApiClient,
     EstfeedApiError,
     EstfeedAuthError,
+    GasPriceClient,
     OpenMeteoClient,
 )
 from .const import DEFAULT_UPDATE_INTERVAL, DOMAIN, get_area_config
@@ -371,3 +372,53 @@ class EstfeedDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             weighted_temp, predicted_daily_m3, estimated,
         )
         return round(estimated, 2), round(predicted_daily_m3, 2)
+
+
+GAS_PRICE_UPDATE_INTERVAL = 3600  # 1 hour — price changes daily
+
+
+class GasPriceCoordinator(DataUpdateCoordinator[dict[str, Any]]):
+    """Coordinator to fetch daily gas exchange price from Elering."""
+
+    config_entry: ConfigEntry
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        config_entry: ConfigEntry,
+        gas_price_api: GasPriceClient,
+    ) -> None:
+        super().__init__(
+            hass,
+            _LOGGER,
+            name=f"{DOMAIN}_gas_price",
+            config_entry=config_entry,
+            update_interval=timedelta(seconds=GAS_PRICE_UPDATE_INTERVAL),
+        )
+        self.gas_price_api = gas_price_api
+
+    async def _async_update_data(self) -> dict[str, Any]:
+        """Fetch today's gas exchange price."""
+        now = datetime.now(timezone.utc)
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        # Fetch today + yesterday (in case today's price isn't published yet)
+        entries = await self.gas_price_api.get_gas_price(
+            start=today_start - timedelta(days=1),
+            end=now,
+        )
+
+        if not entries:
+            raise UpdateFailed("No gas price data available")
+
+        # Use the most recent price entry
+        latest = max(entries, key=lambda e: e["timestamp"])
+        price_eur_mwh = latest["price"]
+        price_timestamp = datetime.fromtimestamp(
+            latest["timestamp"], tz=timezone.utc
+        )
+
+        return {
+            "price_eur_mwh": round(price_eur_mwh, 3),
+            "price_eur_kwh": round(price_eur_mwh / 1000, 6),
+            "price_date": price_timestamp.strftime("%Y-%m-%d"),
+        }

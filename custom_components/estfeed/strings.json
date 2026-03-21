@@ -41,7 +41,8 @@
       "apartment_gas_energy_total": { "name": "Gas energy this month" },
       "apartment_gas_today": { "name": "Gas today" },
       "apartment_gas_flow_rate": { "name": "Gas flow rate" },
-      "apartment_gas_estimated": { "name": "Gas estimated" }
+      "apartment_gas_estimated": { "name": "Gas estimated" },
+      "gas_market_price": { "name": "Gas market price" }
     }
   },
   "options": {

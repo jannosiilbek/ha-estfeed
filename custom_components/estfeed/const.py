@@ -16,6 +16,7 @@ DEFAULT_UPDATE_INTERVAL = 3600  # 1 hour
 TOKEN_URL = "https://kc.elering.ee/realms/elering-sso/protocol/openid-connect/token"
 BASE_URL = "https://estfeed.elering.ee"
 OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
+GAS_PRICE_URL = "https://dashboard.elering.ee/api/gas-trade"
 
 API_DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 

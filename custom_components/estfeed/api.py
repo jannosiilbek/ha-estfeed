@@ -10,7 +10,7 @@ from typing import Any
 
 import aiohttp
 
-from .const import API_DATETIME_FORMAT, BASE_URL, OPEN_METEO_URL, TOKEN_URL
+from .const import API_DATETIME_FORMAT, BASE_URL, GAS_PRICE_URL, OPEN_METEO_URL, TOKEN_URL
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -138,6 +138,43 @@ class EstfeedApiClient:
                 return await resp.json()
         except aiohttp.ClientError as err:
             raise EstfeedApiError(f"Connection error: {err}") from err
+
+
+class GasPriceClient:
+    """Client for the Elering gas trade price API (public, no auth)."""
+
+    def __init__(self, session: aiohttp.ClientSession) -> None:
+        self._session = session
+
+    async def get_gas_price(
+        self,
+        start: datetime,
+        end: datetime,
+    ) -> list[dict[str, Any]]:
+        """Fetch daily gas exchange prices for the given period.
+
+        Returns list of {timestamp: int, price: float} from the common Baltic area.
+        """
+        params = {
+            "start": start.strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+            "end": end.strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+        }
+        try:
+            async with self._session.get(GAS_PRICE_URL, params=params) as resp:
+                if resp.status != 200:
+                    _LOGGER.warning("Gas price API returned %s", resp.status)
+                    return []
+                data = await resp.json()
+                if not data.get("success"):
+                    return []
+                return [
+                    entry
+                    for entry in data.get("data", {}).get("common", [])
+                    if entry.get("price") is not None
+                ]
+        except aiohttp.ClientError as err:
+            _LOGGER.warning("Failed to fetch gas price: %s", err)
+            return []
 
 
 class OpenMeteoClient:
