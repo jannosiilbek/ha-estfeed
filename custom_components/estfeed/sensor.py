@@ -13,7 +13,7 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfEnergy, UnitOfVolume, UnitOfVolumeFlowRate
+from homeassistant.const import UnitOfEnergy, UnitOfPower, UnitOfVolume, UnitOfVolumeFlowRate
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceEntryType
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -126,6 +126,15 @@ SENSORS: tuple[EstfeedSensorDescription, ...] = (
         value_fn=lambda data: data["gas"]["apartment_today_m3"],
     ),
     EstfeedSensorDescription(
+        key="apartment_gas_energy_today",
+        translation_key="apartment_gas_energy_today",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        suggested_display_precision=2,
+        value_fn=lambda data: data["gas"]["apartment_today_kwh"],
+    ),
+    EstfeedSensorDescription(
         key="apartment_gas_flow_rate",
         translation_key="apartment_gas_flow_rate",
         native_unit_of_measurement=UnitOfVolumeFlowRate.CUBIC_METERS_PER_HOUR,
@@ -133,6 +142,15 @@ SENSORS: tuple[EstfeedSensorDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=3,
         value_fn=lambda data: data["gas"]["apartment_flow_rate_m3h"],
+    ),
+    EstfeedSensorDescription(
+        key="apartment_gas_power",
+        translation_key="apartment_gas_power",
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=3,
+        value_fn=lambda data: data["gas"]["apartment_power_kw"],
     ),
     EstfeedSensorDescription(
         key="apartment_gas_estimated",

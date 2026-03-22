@@ -59,7 +59,9 @@ def _make_result(
     total_m3: float = 0.0,
     total_kwh: float = 0.0,
     today_m3: float = 0.0,
+    today_kwh: float = 0.0,
     flow_rate_m3h: float = 0.0,
+    power_kw: float = 0.0,
 ) -> dict[str, Any]:
     """Build the coordinator result dict. Single source of truth for the shape."""
     return {
@@ -70,7 +72,9 @@ def _make_result(
             "apartment_total_m3": round(total_m3, 2),
             "apartment_total_kwh": round(total_kwh, 2),
             "apartment_today_m3": round(today_m3, 2),
+            "apartment_today_kwh": round(today_kwh, 2),
             "apartment_flow_rate_m3h": round(flow_rate_m3h, 3),
+            "apartment_power_kw": round(power_kw, 3),
         },
     }
 
@@ -168,6 +172,9 @@ class EstfeedDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         today_actual_m3 = sum(
             h["m3"] for h in hourly_data if h["dt"] >= today_start
         )
+        today_actual_kwh = sum(
+            h["kwh"] for h in hourly_data if h["dt"] >= today_start
+        )
 
         last_actual_dt = max(
             (h["dt"] for h in hourly_data if h["m3"] > 0 or h["kwh"] > 0),
@@ -199,6 +206,7 @@ class EstfeedDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         total_m3 = month_actual_m3 + estimated_m3
         total_kwh = month_actual_kwh + estimated_m3 * calorific
         today_m3 = today_actual_m3
+        today_kwh = today_actual_kwh
         if last_actual_dt and predicted_daily_m3 > 0 and hourly_profile is not None:
             # Sum profile weights for gap hours that fall within today
             gap_hours = max(1, int((now - last_actual_dt).total_seconds() / 3600))
@@ -209,7 +217,9 @@ class EstfeedDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 )
                 if gap_dt >= today_start:
                     today_gap_weight += hourly_profile[gap_dt.hour]
-            today_m3 += predicted_daily_m3 * today_gap_weight
+            today_gap_m3 = predicted_daily_m3 * today_gap_weight
+            today_m3 += today_gap_m3
+            today_kwh += today_gap_m3 * calorific
 
         # Apply apartment area ratio
         apartment_area, building_area = get_area_config(self.config_entry)
@@ -234,6 +244,7 @@ class EstfeedDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             flow_rate = predicted_daily_m3 * hourly_profile[now.hour] * area_ratio
         else:
             flow_rate = 0
+        power_kw = flow_rate * calorific
 
         return _make_result(
             has_gas=True,
@@ -242,7 +253,9 @@ class EstfeedDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             total_m3=apt_total_m3,
             total_kwh=apt_total_kwh,
             today_m3=today_m3 * area_ratio,
+            today_kwh=today_kwh * area_ratio,
             flow_rate_m3h=flow_rate,
+            power_kw=power_kw,
         )
 
     @staticmethod

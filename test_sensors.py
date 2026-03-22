@@ -309,11 +309,14 @@ def process_gas_data(
     if not hourly:
         return {"has_gas": False, "area_ratio": 0, "is_estimated": False,
                 "gas": {"apartment_total_m3": 0, "apartment_total_kwh": 0,
-                        "apartment_today_m3": 0, "apartment_flow_rate_m3h": 0}}
+                        "apartment_today_m3": 0, "apartment_today_kwh": 0,
+                        "apartment_flow_rate_m3h": 0,
+                        "apartment_power_kw": 0}}
 
     month_actual_m3 = sum(h["m3"] for h in hourly if h["dt"] >= month_start)
     month_actual_kwh = sum(h["kwh"] for h in hourly if h["dt"] >= month_start)
     today_actual_m3 = sum(h["m3"] for h in hourly if h["dt"] >= today_start)
+    today_actual_kwh = sum(h["kwh"] for h in hourly if h["dt"] >= today_start)
     last_actual_dt = max((h["dt"] for h in hourly if h["m3"] > 0 or h["kwh"] > 0), default=None)
     calorific = compute_calorific(hourly, now, DEFAULT_CALORIFIC_KWH_M3)
 
@@ -328,6 +331,7 @@ def process_gas_data(
     total_m3 = month_actual_m3 + estimated_m3
     total_kwh = month_actual_kwh + estimated_m3 * calorific
     today_m3 = today_actual_m3
+    today_kwh = today_actual_kwh
     if last_actual_dt and predicted_daily > 0 and profile is not None:
         gap_h = max(1, int((now - last_actual_dt).total_seconds() / 3600))
         today_gap_weight = 0.0
@@ -337,10 +341,13 @@ def process_gas_data(
             )
             if gap_dt >= today_start:
                 today_gap_weight += profile[gap_dt.hour]
-        today_m3 += predicted_daily * today_gap_weight
+        today_gap_m3 = predicted_daily * today_gap_weight
+        today_m3 += today_gap_m3
+        today_kwh += today_gap_m3 * calorific
 
     area_ratio = apartment_area / building_area if building_area > 0 else 0
     flow_rate = predicted_daily * profile[now.hour] * area_ratio if predicted_daily > 0 and profile else 0
+    power_kw = flow_rate * calorific
     gap_hours = int((now - last_actual_dt).total_seconds() / 3600) if last_actual_dt else 0
 
     return {
@@ -351,7 +358,9 @@ def process_gas_data(
             "apartment_total_m3": round(total_m3 * area_ratio, 2),
             "apartment_total_kwh": round(total_kwh * area_ratio, 2),
             "apartment_today_m3": round(today_m3 * area_ratio, 2),
+            "apartment_today_kwh": round(today_kwh * area_ratio, 2),
             "apartment_flow_rate_m3h": round(flow_rate, 3),
+            "apartment_power_kw": round(power_kw, 3),
         },
         "_diag": {
             "building_total_m3": round(total_m3, 2),
@@ -364,6 +373,7 @@ def process_gas_data(
             "gap_hours": gap_hours,
             "last_actual_dt": last_actual_dt.isoformat() if last_actual_dt else None,
             "today_actual_m3": round(today_actual_m3, 2),
+            "today_actual_kwh": round(today_actual_kwh, 2),
             "hourly_records": len(hourly),
         },
     }
@@ -456,8 +466,12 @@ async def main() -> None:
              "kWh", "energy", "total_increasing", 2, True, "apartment_gas_energy_total"),
             ("apartment_gas_today", gas_inner.get("apartment_today_m3"),
              "m³", "gas", "total", 2, True, "apartment_gas_today"),
+            ("apartment_gas_energy_today", gas_inner.get("apartment_today_kwh"),
+             "kWh", "energy", "total", 2, True, "apartment_gas_energy_today"),
             ("apartment_gas_flow_rate", gas_inner.get("apartment_flow_rate_m3h"),
              "m³/h", "volume_flow_rate", "measurement", 3, True, "apartment_gas_flow_rate"),
+            ("apartment_gas_power", gas_inner.get("apartment_power_kw"),
+             "kW", "power", "measurement", 3, True, "apartment_gas_power"),
             ("apartment_gas_estimated", gas_vals.get("is_estimated"),
              None, None, None, None, False, "apartment_gas_estimated"),
         ]
@@ -489,6 +503,7 @@ async def main() -> None:
             print(f"{BOLD}│{RESET}  {DIM}gap_hours:            {diag['gap_hours']}{RESET}")
             print(f"{BOLD}│{RESET}  {DIM}last_actual_dt:       {diag['last_actual_dt']}{RESET}")
             print(f"{BOLD}│{RESET}  {DIM}today_actual_m3:      {diag['today_actual_m3']}{RESET}")
+            print(f"{BOLD}│{RESET}  {DIM}today_actual_kwh:     {diag['today_actual_kwh']}{RESET}")
             print(f"{BOLD}│{RESET}  {DIM}hourly_records:       {diag['hourly_records']}{RESET}")
 
     # 2. Gas Market Price sensor
