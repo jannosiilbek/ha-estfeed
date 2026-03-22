@@ -22,17 +22,22 @@ from typing import Any
 
 import aiohttp
 
-# -- Constants (mirrors const.py) ------------------------------------------
+from test_utils import (
+    compute_calorific,
+    estimate_gap,
+    fetch_gas_data,
+    fetch_metering_points,
+    fetch_token,
+    fetch_weather,
+    parse_hourly_gas,
+)
 
-TOKEN_URL = "https://kc.elering.ee/realms/elering-sso/protocol/openid-connect/token"
-BASE_URL = "https://estfeed.elering.ee"
-GAS_PRICE_URL = "https://dashboard.elering.ee/api/gas-trade"
-ELECTRICITY_PRICE_URL = "https://dashboard.elering.ee/api/nps/price"
-OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
-DEFAULT_CALORIFIC_KWH_M3 = 10.6
-THERMAL_WEIGHTS = (0.40, 0.40, 0.20)
-MIN_COMPLETE_DAY_HOURS = 20
-LAT, LON = 59.437, 24.7536
+# Constants not re-exported by test_utils (price URLs are only used here)
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).parent / "custom_components" / "estfeed"))
+from const import DEFAULT_CALORIFIC_KWH_M3, ELECTRICITY_PRICE_URL, GAS_PRICE_URL  # noqa: E402
+_sys.path.pop(0)
 
 # -- ANSI helpers -----------------------------------------------------------
 
@@ -186,64 +191,7 @@ def sensor_block(
     return "\n".join(lines)
 
 
-# -- API fetch functions ----------------------------------------------------
-
-async def fetch_token(
-    session: aiohttp.ClientSession, client_id: str, client_secret: str
-) -> str:
-    async with session.post(
-        TOKEN_URL,
-        data={
-            "grant_type": "client_credentials",
-            "client_id": client_id,
-            "client_secret": client_secret,
-        },
-    ) as resp:
-        if resp.status != 200:
-            raise RuntimeError(f"Auth failed: {resp.status} {await resp.text()}")
-        return (await resp.json())["access_token"]
-
-
-async def fetch_metering_points(
-    session: aiohttp.ClientSession, token: str, start: datetime, end: datetime
-) -> list[dict[str, Any]]:
-    params = {
-        "startDateTime": start.strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "endDateTime": end.strftime("%Y-%m-%dT%H:%M:%SZ"),
-    }
-    async with session.get(
-        f"{BASE_URL}/api/public/v1/metering-point-eics",
-        headers={"Authorization": f"Bearer {token}"},
-        params=params,
-    ) as resp:
-        if resp.status != 200:
-            raise RuntimeError(f"Metering points: {resp.status}")
-        return await resp.json()
-
-
-async def fetch_gas_data(
-    session: aiohttp.ClientSession,
-    token: str,
-    start: datetime,
-    end: datetime,
-    eics: list[str],
-) -> list[dict[str, Any]]:
-    await asyncio.sleep(6)  # rate limit
-    params = {
-        "startDateTime": start.strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "endDateTime": end.strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "resolution": "one_hour",
-        "meteringPointEics": ",".join(eics),
-    }
-    async with session.get(
-        f"{BASE_URL}/api/public/v1/metering-data",
-        headers={"Authorization": f"Bearer {token}"},
-        params=params,
-    ) as resp:
-        if resp.status != 200:
-            raise RuntimeError(f"Metering data: {resp.status}")
-        return await resp.json()
-
+# -- Price fetch functions (unique to this script) --------------------------
 
 async def fetch_gas_price(
     session: aiohttp.ClientSession,
@@ -344,155 +292,7 @@ async def fetch_electricity_prices(
     }
 
 
-async def fetch_weather(session: aiohttp.ClientSession) -> dict[datetime, float]:
-    params = {
-        "latitude": LAT, "longitude": LON,
-        "hourly": "temperature_2m",
-        "past_days": 31, "forecast_days": 1,
-        "timeformat": "iso8601", "timezone": "UTC",
-    }
-    async with session.get(OPEN_METEO_URL, params=params) as resp:
-        if resp.status != 200:
-            return {}
-        data = await resp.json()
-    times = data.get("hourly", {}).get("time", [])
-    temps = data.get("hourly", {}).get("temperature_2m", [])
-    return {
-        datetime.fromisoformat(t).replace(tzinfo=timezone.utc): temp
-        for t, temp in zip(times, temps) if temp is not None
-    }
-
-
-# -- Gas data processing (mirrors coordinator logic) -----------------------
-
-def parse_hourly_gas(
-    metering_data: list[dict[str, Any]], gas_eics: list[str]
-) -> list[dict[str, Any]]:
-    result = []
-    for mp_data in metering_data:
-        eic = mp_data.get("meteringPointEic", "")
-        if eic not in gas_eics or mp_data.get("error"):
-            continue
-        for iv in mp_data.get("accountingIntervals", []):
-            m3 = iv.get("consumptionM3")
-            kwh = iv.get("consumptionKwh")
-            if m3 is None and kwh is None:
-                continue
-            try:
-                dt = datetime.strptime(
-                    iv["periodStart"], "%Y-%m-%dT%H:%M:%SZ"
-                ).replace(tzinfo=timezone.utc)
-            except (ValueError, KeyError):
-                continue
-            result.append({"dt": dt, "m3": m3 or 0.0, "kwh": kwh or 0.0})
-    result.sort(key=lambda h: h["dt"])
-    return result
-
-
-def compute_calorific(hourly: list[dict[str, Any]], now: datetime) -> float:
-    cutoff = now - timedelta(hours=48)
-    total_kwh = sum(h["kwh"] for h in hourly if h["dt"] >= cutoff and h["m3"] > 0)
-    total_m3 = sum(h["m3"] for h in hourly if h["dt"] >= cutoff and h["m3"] > 0)
-    return total_kwh / total_m3 if total_m3 > 0 else DEFAULT_CALORIFIC_KWH_M3
-
-
-def build_hourly_profile(hourly: list[dict[str, Any]]) -> list[float]:
-    days: dict[str, list[dict[str, Any]]] = {}
-    for h in hourly:
-        days.setdefault(h["dt"].strftime("%Y-%m-%d"), []).append(h)
-    hour_sums = [0.0] * 24
-    count = 0
-    for hours in days.values():
-        if len(hours) < MIN_COMPLETE_DAY_HOURS:
-            continue
-        total = sum(h["m3"] for h in hours)
-        if total <= 0:
-            continue
-        count += 1
-        for h in hours:
-            hour_sums[h["dt"].hour] += h["m3"] / total
-    if count == 0:
-        return [1.0 / 24] * 24
-    profile = [s / count for s in hour_sums]
-    ps = sum(profile)
-    return [p / ps for p in profile] if ps > 0 else [1.0 / 24] * 24
-
-
-def linear_regression(x: list[float], y: list[float]) -> tuple[float, float] | None:
-    n = len(x)
-    if n < 3 or len(y) != n:
-        return None
-    sx, sy = sum(x), sum(y)
-    sxx = sum(xi * xi for xi in x)
-    sxy = sum(xi * yi for xi, yi in zip(x, y))
-    d = n * sxx - sx * sx
-    if abs(d) < 1e-10:
-        return None
-    return (n * sxy - sx * sy) / d, (sy * sxx - sx * sxy) / d
-
-
-def daily_avg_temp(day: str, temps: dict[datetime, float]) -> float | None:
-    vals = [
-        temps[datetime.strptime(day, "%Y-%m-%d").replace(hour=h, tzinfo=timezone.utc)]
-        for h in range(24)
-        if datetime.strptime(day, "%Y-%m-%d").replace(hour=h, tzinfo=timezone.utc) in temps
-    ]
-    return sum(vals) / len(vals) if vals else None
-
-
-def estimate_gap(
-    hourly: list[dict[str, Any]],
-    temps: dict[datetime, float],
-    last_actual: datetime,
-    now: datetime,
-) -> tuple[float, float, list[float]]:
-    daily: dict[str, dict[str, float]] = {}
-    for h in hourly:
-        dk = h["dt"].strftime("%Y-%m-%d")
-        if dk not in daily:
-            daily[dk] = {"m3": 0.0, "hours": 0}
-        daily[dk]["m3"] += h["m3"]
-        daily[dk]["hours"] += 1
-
-    daily_temps: dict[str, float] = {}
-    for dk, agg in daily.items():
-        if agg["hours"] < MIN_COMPLETE_DAY_HOURS:
-            continue
-        t = daily_avg_temp(dk, temps)
-        if t is not None:
-            daily_temps[dk] = t
-
-    sorted_days = sorted(daily_temps.keys())
-    w0, w1, w2 = THERMAL_WEIGHTS
-    wt, dm = [], []
-    for i in range(2, len(sorted_days)):
-        wt.append(w0 * daily_temps[sorted_days[i]] + w1 * daily_temps[sorted_days[i-1]] + w2 * daily_temps[sorted_days[i-2]])
-        dm.append(daily[sorted_days[i]]["m3"])
-
-    profile = build_hourly_profile(hourly)
-    reg = linear_regression(wt, dm)
-    if reg is None:
-        return 0.0, 0.0, profile
-
-    slope, intercept = reg
-    gap_hours = max(1, int((now - last_actual).total_seconds() / 3600))
-    gap_temps = [temps[dt] for i in range(gap_hours)
-                 if (dt := (last_actual + timedelta(hours=i+1)).replace(minute=0, second=0, microsecond=0)) in temps]
-    if not gap_temps:
-        return 0.0, 0.0, profile
-
-    today_avg = sum(gap_temps) / len(gap_temps)
-    yest = daily_avg_temp((now - timedelta(days=1)).strftime("%Y-%m-%d"), temps) or today_avg
-    d2 = daily_avg_temp((now - timedelta(days=2)).strftime("%Y-%m-%d"), temps) or yest
-    weighted = w0 * today_avg + w1 * yest + w2 * d2
-    pred_daily = max(0, slope * weighted + intercept)
-
-    gap_weight = sum(
-        profile[(last_actual + timedelta(hours=i+1)).replace(minute=0, second=0, microsecond=0).hour]
-        for i in range(gap_hours)
-    )
-    return round(pred_daily * gap_weight, 2), round(pred_daily, 2), profile
-
+# -- Gas data processing (unique to this script) ---------------------------
 
 def process_gas_data(
     metering_data: list[dict[str, Any]],
@@ -503,7 +303,6 @@ def process_gas_data(
 ) -> dict[str, Any]:
     now = datetime.now(timezone.utc)
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
     hourly = parse_hourly_gas(metering_data, gas_eics)
@@ -516,7 +315,7 @@ def process_gas_data(
     month_actual_kwh = sum(h["kwh"] for h in hourly if h["dt"] >= month_start)
     today_actual_m3 = sum(h["m3"] for h in hourly if h["dt"] >= today_start)
     last_actual_dt = max((h["dt"] for h in hourly if h["m3"] > 0 or h["kwh"] > 0), default=None)
-    calorific = compute_calorific(hourly, now)
+    calorific = compute_calorific(hourly, now, DEFAULT_CALORIFIC_KWH_M3)
 
     estimated_m3 = 0.0
     predicted_daily = 0.0
@@ -554,7 +353,6 @@ def process_gas_data(
             "apartment_today_m3": round(today_m3 * area_ratio, 2),
             "apartment_flow_rate_m3h": round(flow_rate, 3),
         },
-        # Diagnostics (not exposed as sensors, but useful for debugging)
         "_diag": {
             "building_total_m3": round(total_m3, 2),
             "building_total_kwh": round(total_kwh, 2),

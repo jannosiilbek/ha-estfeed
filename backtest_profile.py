@@ -13,78 +13,24 @@ from __future__ import annotations
 import asyncio
 import math
 import sys
-import time
 from datetime import datetime, timedelta, timezone
 from getpass import getpass
 from typing import Any
 
 import aiohttp
 
-TOKEN_URL = "https://kc.elering.ee/realms/elering-sso/protocol/openid-connect/token"
-BASE_URL = "https://estfeed.elering.ee"
-OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
+from test_utils import (
+    MIN_COMPLETE_DAY_HOURS,
+    THERMAL_WEIGHTS,
+    build_hourly_profile,
+    daily_avg_temp,
+    fetch_gas_data_parsed,
+    fetch_token,
+    fetch_weather,
+    linear_regression,
+)
+
 EIC = "38ZEE-G0120307-8"
-DEFAULT_LAT = 59.437
-DEFAULT_LON = 24.7536
-THERMAL_WEIGHTS = (0.40, 0.40, 0.20)
-MIN_COMPLETE_DAY_HOURS = 20
-
-
-# ---------------------------------------------------------------------------
-# Core algorithms (same as coordinator.py / test_api.py)
-# ---------------------------------------------------------------------------
-
-def linear_regression(x: list[float], y: list[float]) -> tuple[float, float] | None:
-    n = len(x)
-    if n < 3 or len(y) != n:
-        return None
-    sum_x = sum(x)
-    sum_y = sum(y)
-    sum_xx = sum(xi * xi for xi in x)
-    sum_xy = sum(xi * yi for xi, yi in zip(x, y))
-    denom = n * sum_xx - sum_x * sum_x
-    if abs(denom) < 1e-10:
-        return None
-    slope = (n * sum_xy - sum_x * sum_y) / denom
-    intercept = (sum_y - slope * sum_x) / n
-    return slope, intercept
-
-
-def build_hourly_profile(hourly: list[dict[str, Any]]) -> list[float]:
-    """Build normalized 24-hour consumption profile from parsed hourly data."""
-    days: dict[str, list[dict[str, Any]]] = {}
-    for h in hourly:
-        day_key = h["dt"].strftime("%Y-%m-%d")
-        days.setdefault(day_key, []).append(h)
-
-    hour_fraction_sums = [0.0] * 24
-    count = 0
-    for hours in days.values():
-        if len(hours) < MIN_COMPLETE_DAY_HOURS:
-            continue
-        day_total = sum(h["m3"] for h in hours)
-        if day_total <= 0:
-            continue
-        count += 1
-        for h in hours:
-            hour_fraction_sums[h["dt"].hour] += h["m3"] / day_total
-
-    if count == 0:
-        return [1.0 / 24] * 24
-    profile = [s / count for s in hour_fraction_sums]
-    profile_sum = sum(profile)
-    if profile_sum <= 0:
-        return [1.0 / 24] * 24
-    return [p / profile_sum for p in profile]
-
-
-def daily_avg_temp(day_key: str, temperatures: dict[datetime, float]) -> float | None:
-    temps = []
-    for hour in range(24):
-        dt = datetime.strptime(day_key, "%Y-%m-%d").replace(hour=hour, tzinfo=timezone.utc)
-        if dt in temperatures:
-            temps.append(temperatures[dt])
-    return sum(temps) / len(temps) if temps else None
 
 
 def predict_daily_m3(
@@ -93,7 +39,6 @@ def predict_daily_m3(
     target_day: str,
 ) -> float | None:
     """Run thermal-inertia-aware regression on training data, predict for target_day."""
-    # Build daily aggregates
     daily: dict[str, dict[str, float]] = {}
     for h in training_data:
         day_key = h["dt"].strftime("%Y-%m-%d")
@@ -102,7 +47,6 @@ def predict_daily_m3(
         daily[day_key]["m3"] += h["m3"]
         daily[day_key]["hours"] += 1
 
-    # Build daily avg temps for complete days
     daily_temps: dict[str, float] = {}
     for day_key, agg in daily.items():
         if agg["hours"] < MIN_COMPLETE_DAY_HOURS:
@@ -111,7 +55,6 @@ def predict_daily_m3(
         if t is not None:
             daily_temps[day_key] = t
 
-    # Regression pairs using 3-day weighted temp
     sorted_days = sorted(daily_temps.keys())
     w0, w1, w2 = THERMAL_WEIGHTS
     weighted_temps: list[float] = []
@@ -131,7 +74,6 @@ def predict_daily_m3(
 
     slope, intercept = reg
 
-    # Weighted temp for target day
     target_temp = daily_avg_temp(target_day, temperatures)
     d1 = (datetime.strptime(target_day, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
     d2 = (datetime.strptime(target_day, "%Y-%m-%d") - timedelta(days=2)).strftime("%Y-%m-%d")
@@ -150,72 +92,6 @@ def predict_daily_m3(
 
 
 # ---------------------------------------------------------------------------
-# Data fetching
-# ---------------------------------------------------------------------------
-
-async def fetch_token(session: aiohttp.ClientSession, client_id: str, client_secret: str) -> str:
-    async with session.post(TOKEN_URL, data={
-        "grant_type": "client_credentials",
-        "client_id": client_id,
-        "client_secret": client_secret,
-    }) as resp:
-        data = await resp.json()
-        return data["access_token"]
-
-
-async def fetch_gas_data(
-    session: aiohttp.ClientSession, token: str, start: datetime, end: datetime
-) -> list[dict[str, Any]]:
-    """Fetch hourly gas data for a date range, returns parsed [{dt, m3, kwh}]."""
-    params = {
-        "startDateTime": start.strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "endDateTime": end.strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "resolution": "one_hour",
-        "meteringPointEics": EIC,
-    }
-    async with session.get(
-        f"{BASE_URL}/api/public/v1/metering-data",
-        headers={"Authorization": f"Bearer {token}"},
-        params=params,
-    ) as resp:
-        data = await resp.json()
-
-    result = []
-    for mp in data:
-        for iv in mp.get("accountingIntervals", []):
-            m3 = iv.get("consumptionM3")
-            if m3 is None:
-                continue
-            dt = datetime.strptime(
-                iv["periodStart"], "%Y-%m-%dT%H:%M:%SZ"
-            ).replace(tzinfo=timezone.utc)
-            result.append({"dt": dt, "m3": m3, "kwh": iv.get("consumptionKwh", 0)})
-    return result
-
-
-async def fetch_weather(session: aiohttp.ClientSession, past_days: int) -> dict[datetime, float]:
-    params = {
-        "latitude": DEFAULT_LAT,
-        "longitude": DEFAULT_LON,
-        "hourly": "temperature_2m",
-        "past_days": past_days,
-        "forecast_days": 1,
-        "timeformat": "iso8601",
-        "timezone": "UTC",
-    }
-    async with session.get(OPEN_METEO_URL, params=params) as resp:
-        data = await resp.json()
-    times = data.get("hourly", {}).get("time", [])
-    temps = data.get("hourly", {}).get("temperature_2m", [])
-    result: dict[datetime, float] = {}
-    for t, temp in zip(times, temps):
-        if temp is not None:
-            dt = datetime.fromisoformat(t).replace(tzinfo=timezone.utc)
-            result[dt] = temp
-    return result
-
-
-# ---------------------------------------------------------------------------
 # Backtest
 # ---------------------------------------------------------------------------
 
@@ -225,12 +101,10 @@ def run_backtest(
 ) -> None:
     """Walk through historical data, simulate gaps, compare methods."""
 
-    # Index hourly data by (date_str, hour)
     hourly_by_dt: dict[datetime, float] = {}
     for h in all_hourly:
         hourly_by_dt[h["dt"]] = h["m3"]
 
-    # Get all complete days
     days_data: dict[str, list[dict[str, Any]]] = {}
     for h in all_hourly:
         day_key = h["dt"].strftime("%Y-%m-%d")
@@ -249,15 +123,12 @@ def run_backtest(
     print(f"Complete days: {len(complete_days)}")
     print(f"Total hourly records: {len(all_hourly)}")
 
-    # Test configuration
     gap_lengths = [6, 12, 18, 24]
-    gap_starts_utc = [0, 4, 6, 8, 12, 16, 18, 22]  # various start hours
-    training_window = 28  # days
+    gap_starts_utc = [0, 4, 6, 8, 12, 16, 18, 22]
+    training_window = 28
 
-    # Results storage
     results: list[dict[str, Any]] = []
 
-    # Walk through test days (need 30 days before for training)
     test_days = complete_days[30:]
     print(f"Test days: {len(test_days)} ({test_days[0]} to {test_days[-1]})")
     print(f"Training window: {training_window} days before each test day")
@@ -271,48 +142,36 @@ def run_backtest(
 
         test_dt = datetime.strptime(test_day, "%Y-%m-%d").replace(tzinfo=timezone.utc)
 
-        # Training data: preceding training_window days
         train_start = test_dt - timedelta(days=training_window)
         training_hourly = [
             h for h in all_hourly
             if train_start <= h["dt"] < test_dt
         ]
 
-        if len(training_hourly) < training_window * 18:  # need reasonable coverage
+        if len(training_hourly) < training_window * 18:
             continue
 
-        # Predict daily m³ for test day
         predicted = predict_daily_m3(training_hourly, temperatures, test_day)
         if predicted is None or predicted <= 0:
             continue
 
-        # Build profile from training data
         profile = build_hourly_profile(training_hourly)
-
-        # Actual daily total
         actual_daily = sum(h["m3"] for h in days_data.get(test_day, []))
 
         for gap_len in gap_lengths:
             for gap_start in gap_starts_utc:
-                # Actual consumption for this gap window
                 actual_gap = 0.0
                 hours_found = 0
                 for i in range(gap_len):
-                    hour = (gap_start + i) % 24
-                    # If gap crosses midnight, it goes into next day
-                    day_offset = (gap_start + i) // 24
                     gap_dt = test_dt + timedelta(hours=gap_start + i)
                     if gap_dt in hourly_by_dt:
                         actual_gap += hourly_by_dt[gap_dt]
                         hours_found += 1
 
-                if hours_found < gap_len * 0.8:  # need 80% of hours
+                if hours_found < gap_len * 0.8:
                     continue
 
-                # Flat estimation
                 flat_est = predicted * (gap_len / 24)
-
-                # Profile estimation
                 profile_weight = sum(profile[(gap_start + i) % 24] for i in range(gap_len))
                 profile_est = predicted * profile_weight
 
@@ -478,12 +337,10 @@ async def main():
         client_secret = getpass("Enter client_secret: ").strip()
 
     async with aiohttp.ClientSession() as session:
-        # Auth
         print("\nAuthenticating...", end=" ", flush=True)
         token = await fetch_token(session, client_id, client_secret)
         print("OK")
 
-        # Fetch gas data in 30-day chunks (going back ~90 days)
         now = datetime.now(timezone.utc)
         all_hourly: list[dict[str, Any]] = []
         seen_dts: set[datetime] = set()
@@ -497,9 +354,7 @@ async def main():
         for i, (start, end) in enumerate(chunks):
             print(f"Fetching gas data chunk {i+1}/3 ({start.strftime('%Y-%m-%d')} to {end.strftime('%Y-%m-%d')})...",
                   end=" ", flush=True)
-            if i > 0:
-                await asyncio.sleep(7)  # Rate limit
-            chunk_data = await fetch_gas_data(session, token, start, end)
+            chunk_data = await fetch_gas_data_parsed(session, token, start, end, EIC)
             new = 0
             for h in chunk_data:
                 if h["dt"] not in seen_dts:
@@ -513,12 +368,10 @@ async def main():
         if all_hourly:
             print(f"Range: {all_hourly[0]['dt'].strftime('%Y-%m-%d')} to {all_hourly[-1]['dt'].strftime('%Y-%m-%d')}")
 
-        # Fetch weather
         print("\nFetching weather data (92 days)...", end=" ", flush=True)
         temperatures = await fetch_weather(session, past_days=92)
         print(f"{len(temperatures)} hourly temperatures")
 
-    # Run backtest
     run_backtest(all_hourly, temperatures)
 
 

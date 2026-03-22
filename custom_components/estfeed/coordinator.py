@@ -20,22 +20,17 @@ from .api import (
     OpenMeteoClient,
 )
 from .const import (
+    DEFAULT_CALORIFIC_KWH_M3,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
     ELECTRICITY_PRICE_UPDATE_INTERVAL,
     GAS_PRICE_UPDATE_INTERVAL,
+    MIN_COMPLETE_DAY_HOURS,
+    THERMAL_WEIGHTS,
     get_area_config,
 )
 
 _LOGGER = logging.getLogger(__name__)
-
-# Thermal inertia weights — validated over 196 days (Sep 2025–Mar 2026).
-# Building thermal mass means gas usage lags temperature by 1-2 days.
-# 3-day model (MAPE 8.1%, MAE 3.0 m³) outperforms 2-day (8.6%, 3.2 m³).
-THERMAL_WEIGHTS = (0.40, 0.40, 0.20)  # today, yesterday, day-before
-
-MIN_COMPLETE_DAY_HOURS = 20  # Skip days with fewer hours of data
-DEFAULT_CALORIFIC_KWH_M3 = 10.6  # Estonian natural gas typical value
 
 
 def _linear_regression(
