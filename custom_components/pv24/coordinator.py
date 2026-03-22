@@ -1,4 +1,4 @@
-"""DataUpdateCoordinator for Estfeed gas integration with predictive estimation."""
+"""DataUpdateCoordinator for PV24 gas integration with predictive estimation."""
 
 from __future__ import annotations
 
@@ -80,7 +80,7 @@ def _make_result(
 
 
 class EstfeedDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
-    """Coordinator to fetch Estfeed gas data with weather-based estimation."""
+    """Coordinator to fetch PV24 gas data with weather-based estimation."""
 
     config_entry: ConfigEntry
 
@@ -121,7 +121,7 @@ class EstfeedDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             raise UpdateFailed(f"Failed to fetch metering points: {err}") from err
 
         _LOGGER.info(
-            "Estfeed: found %d metering point(s): %s",
+            "PV24: found %d metering point(s): %s",
             len(self.metering_points),
             ", ".join(
                 f"{mp['eic']} ({mp['commodityType']})" for mp in self.metering_points

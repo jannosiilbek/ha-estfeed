@@ -1,4 +1,4 @@
-# Estfeed Energy Data
+# PV24
 
 A Home Assistant custom integration that fetches electricity and gas metering data from the [Estfeed](https://estfeed.elering.ee) platform, plus real-time NordPool electricity spot prices for Estonia via the Elering API.
 
@@ -15,18 +15,18 @@ A Home Assistant custom integration that fetches electricity and gas metering da
 ### HACS (recommended)
 
 1. Add this repository as a custom repository in HACS
-2. Search for "Estfeed Energy Data" and install
+2. Search for "PV24" and install
 3. Restart Home Assistant
 
 ### Manual
 
-1. Copy the `custom_components/estfeed` folder into your Home Assistant `custom_components` directory
+1. Copy the `custom_components/pv24` folder into your Home Assistant `custom_components` directory
 2. Restart Home Assistant
 
 ## Configuration
 
 1. Go to **Settings → Devices & Services → Add Integration**
-2. Search for **Estfeed Energy Data**
+2. Search for **PV24**
 3. Enter your Estfeed API credentials:
    - **Client ID** — from Estfeed portal → Account & Settings → API Key
    - **Client Secret** — the secret shown when you created the API key

@@ -1,5 +1,5 @@
 """
-Test all Estfeed integration sensors with live API data.
+Test all PV24 integration sensors with live API data.
 
 Shows every sensor exactly as Home Assistant would see it,
 with full metadata: device_class, state_class, unit, precision,
@@ -35,7 +35,7 @@ from test_utils import (
 # Constants not re-exported by test_utils (price URLs are only used here)
 import sys as _sys
 from pathlib import Path as _Path
-_sys.path.insert(0, str(_Path(__file__).parent / "custom_components" / "estfeed"))
+_sys.path.insert(0, str(_Path(__file__).parent / "custom_components" / "pv24"))
 from const import DEFAULT_CALORIFIC_KWH_M3, ELECTRICITY_PRICE_URL, GAS_PRICE_URL  # noqa: E402
 _sys.path.pop(0)
 
@@ -411,7 +411,7 @@ async def main() -> None:
         apartment_area = float(input("Apartment area m² [54.4]: ").strip() or "54.4")
         building_area = float(input("Building area m² [816.6]: ").strip() or "816.6")
 
-    print(header("Estfeed Integration — Sensor Preview"))
+    print(header("PV24 — Sensor Preview"))
     print(f"{DIM}  Fetching live data from APIs...{RESET}")
 
     now = datetime.now(timezone.utc)
@@ -456,7 +456,7 @@ async def main() -> None:
     # 1. Apartment Gas sensors
     gas_available = bool(gas_data and gas_data["has_gas"])
     if gas_data or not prices_only:
-        print(device_header("Apartment Gas", "Elering", "Estfeed"))
+        print(device_header("Apartment Gas", "Elering", "PV24"))
         gas_vals = gas_data if gas_data else {}
         gas_inner = gas_vals.get("gas", {})
         sensors = [

@@ -1,5 +1,5 @@
 """
-Estfeed Gas & Open-Meteo API validation script.
+PV24 Gas & Open-Meteo API validation script.
 Tests gas hourly data, weather temperatures, and estimation logic.
 
 Usage: python3 test_api.py <client_id> <client_secret>
@@ -269,7 +269,7 @@ def test_estimation(gas_intervals: list[dict], temperatures: dict[datetime, floa
 
 
 async def main():
-    print("Estfeed Gas & Weather API Validation")
+    print("PV24 Gas & Weather API Validation")
     print("=" * 45)
 
     if len(sys.argv) >= 3:

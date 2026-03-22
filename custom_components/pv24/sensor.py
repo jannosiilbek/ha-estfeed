@@ -1,4 +1,4 @@
-"""Sensor entities for Estfeed gas integration."""
+"""Sensor entities for PV24 gas integration."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ from .coordinator import (
 
 @dataclass(kw_only=True)
 class EstfeedSensorDescription(SensorEntityDescription):
-    """Describes an Estfeed sensor entity."""
+    """Describes a PV24 sensor entity."""
 
     value_fn: Callable[[dict[str, Any]], float | bool | None]
     attr_fn: Callable[[dict[str, Any]], dict[str, Any] | None] = lambda _: None
@@ -166,7 +166,7 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up Estfeed sensors from a config entry."""
+    """Set up PV24 sensors from a config entry."""
     data = hass.data[DOMAIN][entry.entry_id]
     coordinator: EstfeedDataCoordinator = data["coordinator"]
     gas_price_coordinator: GasPriceCoordinator = data["gas_price_coordinator"]
@@ -197,7 +197,7 @@ async def async_setup_entry(
 
 
 class EstfeedSensor(CoordinatorEntity[EstfeedDataCoordinator], SensorEntity):
-    """Representation of an Estfeed gas sensor."""
+    """Representation of a PV24 gas sensor."""
 
     entity_description: EstfeedSensorDescription
     _attr_has_entity_name = True
@@ -215,7 +215,7 @@ class EstfeedSensor(CoordinatorEntity[EstfeedDataCoordinator], SensorEntity):
             "identifiers": {(DOMAIN, f"{entry.entry_id}_apartment")},
             "name": "Apartment Gas",
             "manufacturer": "Elering",
-            "model": "Estfeed",
+            "model": "PV24",
             "entry_type": DeviceEntryType.SERVICE,
         }
 

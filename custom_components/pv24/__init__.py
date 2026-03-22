@@ -1,4 +1,4 @@
-"""Estfeed Gas integration."""
+"""PV24 integration."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ PLATFORMS = ["sensor"]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up Estfeed from a config entry."""
+    """Set up PV24 from a config entry."""
     session = async_get_clientsession(hass)
     estfeed_api = EstfeedApiClient(
         session,

@@ -2,7 +2,7 @@
   "config": {
     "step": {
       "user": {
-        "title": "Connect to Estfeed",
+        "title": "Connect to PV24",
         "description": "Enter your Estfeed API credentials and building details for gas consumption tracking.",
         "data": {
           "client_id": "Client ID",
@@ -18,7 +18,7 @@
         }
       },
       "reauth_confirm": {
-        "title": "Re-authenticate Estfeed",
+        "title": "Re-authenticate PV24",
         "description": "Your Estfeed credentials are no longer valid. Please enter the new client secret.",
         "data": {
           "client_secret": "Client Secret"
@@ -27,11 +27,11 @@
     },
     "error": {
       "invalid_auth": "Invalid credentials. Check your Client ID and Client Secret.",
-      "cannot_connect": "Cannot connect to Estfeed. Please try again later.",
+      "cannot_connect": "Cannot connect to PV24. Please try again later.",
       "unknown": "An unexpected error occurred."
     },
     "abort": {
-      "already_configured": "This Estfeed account is already configured.",
+      "already_configured": "This PV24 account is already configured.",
       "reauth_successful": "Re-authentication successful."
     }
   },
@@ -55,7 +55,7 @@
   "options": {
     "step": {
       "init": {
-        "title": "Estfeed Settings",
+        "title": "PV24 Settings",
         "data": {
           "apartment_area_m2": "Apartment area (m²)",
           "building_area_m2": "Total building area (m²)"

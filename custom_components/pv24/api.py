@@ -1,4 +1,4 @@
-"""API clients for Estfeed metering data and Open-Meteo weather."""
+"""API clients for PV24 metering data and Open-Meteo weather."""
 
 from __future__ import annotations
 

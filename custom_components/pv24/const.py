@@ -1,4 +1,4 @@
-"""Constants for the Estfeed integration."""
+"""Constants for the PV24 integration."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
 
-DOMAIN = "estfeed"
+DOMAIN = "pv24"
 
 CONF_CLIENT_ID = "client_id"
 CONF_CLIENT_SECRET = "client_secret"

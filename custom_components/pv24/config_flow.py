@@ -1,4 +1,4 @@
-"""Config flow for Estfeed integration."""
+"""Config flow for PV24 integration."""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
 
 
 class EstfeedConfigFlow(ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for Estfeed."""
+    """Handle a config flow for PV24."""
 
     VERSION = 1
 
@@ -67,7 +67,7 @@ class EstfeedConfigFlow(ConfigFlow, domain=DOMAIN):
                 errors["base"] = "unknown"
             else:
                 return self.async_create_entry(
-                    title="Estfeed Gas",
+                    title="PV24",
                     data=user_input,
                 )
 
@@ -123,7 +123,7 @@ class EstfeedConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class EstfeedOptionsFlow(OptionsFlow):
-    """Handle options for Estfeed."""
+    """Handle options for PV24."""
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None

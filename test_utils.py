@@ -1,4 +1,4 @@
-"""Shared utilities for Estfeed test/backtest scripts.
+"""Shared utilities for PV24 test/backtest scripts.
 
 Centralises algorithms and API fetch helpers that were previously
 duplicated across test_api.py, test_sensors.py, and backtest_profile.py.
@@ -15,9 +15,9 @@ from pathlib import Path
 
 import aiohttp
 
-# Add estfeed component to path so we can import const without triggering
+# Add pv24 component to path so we can import const without triggering
 # homeassistant imports from __init__.py
-sys.path.insert(0, str(Path(__file__).parent / "custom_components" / "estfeed"))
+sys.path.insert(0, str(Path(__file__).parent / "custom_components" / "pv24"))
 from const import (  # noqa: E402
     BASE_URL,
     DEFAULT_LAT,
@@ -288,7 +288,7 @@ async def fetch_gas_data(
     end: datetime,
     eics: str | list[str],
 ) -> list[dict[str, Any]]:
-    """Fetch raw metering data from Estfeed API."""
+    """Fetch raw metering data from the Estfeed API."""
     await asyncio.sleep(6)  # rate limit
     eic_str = eics if isinstance(eics, str) else ",".join(eics)
     params = {
