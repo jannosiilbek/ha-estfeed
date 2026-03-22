@@ -16,6 +16,7 @@ from .const import (
     ELECTRICITY_PRICE_URL,
     GAS_PRICE_URL,
     OPEN_METEO_URL,
+    PRICE_API_DATETIME_FORMAT,
     TOKEN_URL,
 )
 
@@ -163,8 +164,8 @@ class GasPriceClient:
         Returns list of {timestamp: int, price: float} from the common Baltic area.
         """
         params = {
-            "start": start.strftime("%Y-%m-%dT%H:%M:%S.000Z"),
-            "end": end.strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+            "start": start.strftime(PRICE_API_DATETIME_FORMAT),
+            "end": end.strftime(PRICE_API_DATETIME_FORMAT),
         }
         try:
             async with self._session.get(GAS_PRICE_URL, params=params) as resp:
@@ -201,8 +202,8 @@ class ElectricityPriceClient:
         Prices are in EUR/MWh, 15-minute resolution.
         """
         params = {
-            "start": start.strftime("%Y-%m-%dT%H:%M:%S.000Z"),
-            "end": end.strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+            "start": start.strftime(PRICE_API_DATETIME_FORMAT),
+            "end": end.strftime(PRICE_API_DATETIME_FORMAT),
         }
         try:
             async with self._session.get(

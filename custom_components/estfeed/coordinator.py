@@ -19,8 +19,13 @@ from .api import (
     GasPriceClient,
     OpenMeteoClient,
 )
-from .const import ELECTRICITY_PRICE_UPDATE_INTERVAL
-from .const import DEFAULT_UPDATE_INTERVAL, DOMAIN, get_area_config
+from .const import (
+    DEFAULT_UPDATE_INTERVAL,
+    DOMAIN,
+    ELECTRICITY_PRICE_UPDATE_INTERVAL,
+    GAS_PRICE_UPDATE_INTERVAL,
+    get_area_config,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -456,9 +461,6 @@ class EstfeedDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return round(estimated, 2), round(predicted_daily_m3, 2), profile
 
 
-GAS_PRICE_UPDATE_INTERVAL = 3600  # 1 hour — price changes daily
-
-
 class GasPriceCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Coordinator to fetch daily gas exchange price from Elering."""
 
@@ -548,6 +550,9 @@ class ElectricityPriceCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         tomorrow_start_ts = int((today_start + timedelta(days=1)).timestamp())
         today_entries = [e for e in entries if e["timestamp"] < tomorrow_start_ts]
         tomorrow_entries = [e for e in entries if e["timestamp"] >= tomorrow_start_ts]
+
+        if not today_entries:
+            raise UpdateFailed("No electricity prices for today")
 
         # Find current price: latest entry whose timestamp <= now
         now_ts = int(now.timestamp())

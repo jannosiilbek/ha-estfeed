@@ -17,7 +17,10 @@ from homeassistant.const import UnitOfEnergy, UnitOfVolume, UnitOfVolumeFlowRate
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceEntryType
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.helpers.update_coordinator import (
+    CoordinatorEntity,
+    DataUpdateCoordinator,
+)
 
 from .const import DOMAIN
 from .coordinator import (
@@ -155,11 +158,21 @@ async def async_setup_entry(
         EstfeedSensor(coordinator, entry, desc) for desc in SENSORS
     ]
     entities.extend(
-        GasPriceSensor(gas_price_coordinator, entry, desc)
+        PriceSensor(
+            gas_price_coordinator, entry, desc,
+            device_id_suffix="gas_price",
+            device_name="Gas Market Price",
+            device_model="GET Baltic",
+        )
         for desc in GAS_PRICE_SENSORS
     )
     entities.extend(
-        ElectricityPriceSensor(elec_price_coordinator, entry, desc)
+        PriceSensor(
+            elec_price_coordinator, entry, desc,
+            device_id_suffix="electricity_price",
+            device_name="Electricity Market Price",
+            device_model="Nord Pool EE",
+        )
         for desc in ELECTRICITY_PRICE_SENSORS
     )
     async_add_entities(entities)
@@ -205,43 +218,9 @@ class EstfeedSensor(CoordinatorEntity[EstfeedDataCoordinator], SensorEntity):
         except (KeyError, TypeError):
             return None
 
-
-class ElectricityPriceSensor(CoordinatorEntity[ElectricityPriceCoordinator], SensorEntity):
-    """Representation of an electricity market price sensor."""
-
-    entity_description: EstfeedSensorDescription
-    _attr_has_entity_name = True
-
-    def __init__(
-        self,
-        coordinator: ElectricityPriceCoordinator,
-        entry: ConfigEntry,
-        description: EstfeedSensorDescription,
-    ) -> None:
-        super().__init__(coordinator)
-        self.entity_description = description
-        self._attr_unique_id = f"{entry.entry_id}_{description.key}"
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, f"{entry.entry_id}_electricity_price")},
-            "name": "Electricity Market Price",
-            "manufacturer": "Elering",
-            "model": "Nord Pool EE",
-            "entry_type": DeviceEntryType.SERVICE,
-        }
-
-    @property
-    def native_value(self) -> float | None:
-        """Return the sensor value."""
-        if self.coordinator.data is None:
-            return None
-        try:
-            return self.entity_description.value_fn(self.coordinator.data)
-        except (KeyError, TypeError):
-            return None
-
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
-        """Return extra state attributes (price lists)."""
+        """Return extra state attributes."""
         if self.coordinator.data is None:
             return None
         try:
@@ -249,26 +228,31 @@ class ElectricityPriceSensor(CoordinatorEntity[ElectricityPriceCoordinator], Sen
         except (KeyError, TypeError):
             return None
 
-class GasPriceSensor(CoordinatorEntity[GasPriceCoordinator], SensorEntity):
-    """Representation of a gas market price sensor."""
+
+class PriceSensor(CoordinatorEntity[DataUpdateCoordinator], SensorEntity):
+    """Representation of a market price sensor (gas or electricity)."""
 
     entity_description: EstfeedSensorDescription
     _attr_has_entity_name = True
 
     def __init__(
         self,
-        coordinator: GasPriceCoordinator,
+        coordinator: DataUpdateCoordinator,
         entry: ConfigEntry,
         description: EstfeedSensorDescription,
+        *,
+        device_id_suffix: str,
+        device_name: str,
+        device_model: str,
     ) -> None:
         super().__init__(coordinator)
         self.entity_description = description
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
         self._attr_device_info = {
-            "identifiers": {(DOMAIN, f"{entry.entry_id}_gas_price")},
-            "name": "Gas Market Price",
+            "identifiers": {(DOMAIN, f"{entry.entry_id}_{device_id_suffix}")},
+            "name": device_name,
             "manufacturer": "Elering",
-            "model": "GET Baltic",
+            "model": device_model,
             "entry_type": DeviceEntryType.SERVICE,
         }
 
@@ -284,7 +268,7 @@ class GasPriceSensor(CoordinatorEntity[GasPriceCoordinator], SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
-        """Return extra state attributes (price date)."""
+        """Return extra state attributes."""
         if self.coordinator.data is None:
             return None
         try:

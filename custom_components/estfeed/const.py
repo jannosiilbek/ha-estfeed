@@ -12,6 +12,7 @@ CONF_APARTMENT_AREA = "apartment_area_m2"
 CONF_BUILDING_AREA = "building_area_m2"
 
 DEFAULT_UPDATE_INTERVAL = 3600  # 1 hour
+GAS_PRICE_UPDATE_INTERVAL = 3600  # 1 hour — price changes daily
 
 TOKEN_URL = "https://kc.elering.ee/realms/elering-sso/protocol/openid-connect/token"
 BASE_URL = "https://estfeed.elering.ee"
@@ -21,6 +22,7 @@ ELECTRICITY_PRICE_URL = "https://dashboard.elering.ee/api/nps/price"
 ELECTRICITY_PRICE_UPDATE_INTERVAL = 900  # 15 minutes — matches price block resolution
 
 API_DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
+PRICE_API_DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%S.000Z"
 
 
 def get_area_config(entry: ConfigEntry) -> tuple[float, float]:
