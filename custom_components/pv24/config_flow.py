@@ -27,8 +27,12 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_CLIENT_ID): str,
         vol.Required(CONF_CLIENT_SECRET): str,
-        vol.Required(CONF_APARTMENT_AREA): vol.Coerce(float),
-        vol.Required(CONF_BUILDING_AREA): vol.Coerce(float),
+        vol.Required(CONF_APARTMENT_AREA): vol.All(
+            vol.Coerce(float), vol.Range(min=1)
+        ),
+        vol.Required(CONF_BUILDING_AREA): vol.All(
+            vol.Coerce(float), vol.Range(min=1)
+        ),
     }
 )
 
@@ -138,8 +142,12 @@ class EstfeedOptionsFlow(OptionsFlow):
             step_id="init",
             data_schema=vol.Schema(
                 {
-                    vol.Required(CONF_APARTMENT_AREA, default=current_apartment): vol.Coerce(float),
-                    vol.Required(CONF_BUILDING_AREA, default=current_building): vol.Coerce(float),
+                    vol.Required(CONF_APARTMENT_AREA, default=current_apartment): vol.All(
+                        vol.Coerce(float), vol.Range(min=1)
+                    ),
+                    vol.Required(CONF_BUILDING_AREA, default=current_building): vol.All(
+                        vol.Coerce(float), vol.Range(min=1)
+                    ),
                 }
             ),
         )

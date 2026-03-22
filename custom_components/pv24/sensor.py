@@ -15,7 +15,7 @@ from homeassistant.components.sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfEnergy, UnitOfPower, UnitOfVolume, UnitOfVolumeFlowRate
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceEntryType
+from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
@@ -211,13 +211,13 @@ class EstfeedSensor(CoordinatorEntity[EstfeedDataCoordinator], SensorEntity):
         super().__init__(coordinator)
         self.entity_description = description
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, f"{entry.entry_id}_apartment")},
-            "name": "Apartment Gas",
-            "manufacturer": "Elering",
-            "model": "PV24",
-            "entry_type": DeviceEntryType.SERVICE,
-        }
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, f"{entry.entry_id}_apartment")},
+            name="Apartment Gas",
+            manufacturer="Elering",
+            model="PV24",
+            entry_type=DeviceEntryType.SERVICE,
+        )
 
     @property
     def available(self) -> bool:
@@ -266,13 +266,13 @@ class PriceSensor(CoordinatorEntity[DataUpdateCoordinator], SensorEntity):
         super().__init__(coordinator)
         self.entity_description = description
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, f"{entry.entry_id}_{device_id_suffix}")},
-            "name": device_name,
-            "manufacturer": "Elering",
-            "model": device_model,
-            "entry_type": DeviceEntryType.SERVICE,
-        }
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, f"{entry.entry_id}_{device_id_suffix}")},
+            name=device_name,
+            manufacturer="Elering",
+            model=device_model,
+            entry_type=DeviceEntryType.SERVICE,
+        )
 
     @property
     def native_value(self) -> float | None:

@@ -23,6 +23,7 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 _RATE_LIMIT_SECONDS = 6  # Estfeed API allows 1 request per 5s; add 1s buffer
+_REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=30)
 
 
 class EstfeedAuthError(Exception):
@@ -82,6 +83,7 @@ class EstfeedApiClient:
                     "client_secret": self._client_secret,
                 },
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
+                timeout=_REQUEST_TIMEOUT,
             ) as resp:
                 await self._check_response(resp, "Token request failed")
                 data = await resp.json()
@@ -112,6 +114,7 @@ class EstfeedApiClient:
                 f"{BASE_URL}/api/public/v1/metering-point-eics",
                 params=params,
                 headers={"Authorization": f"Bearer {token}"},
+                timeout=_REQUEST_TIMEOUT,
             ) as resp:
                 await self._check_response(resp, "Metering points request failed")
                 return await resp.json()
@@ -141,6 +144,7 @@ class EstfeedApiClient:
                 f"{BASE_URL}/api/public/v1/metering-data",
                 params=params,
                 headers={"Authorization": f"Bearer {token}"},
+                timeout=_REQUEST_TIMEOUT,
             ) as resp:
                 await self._check_response(resp, "Metering data request failed")
                 return await resp.json()
@@ -168,7 +172,7 @@ class GasPriceClient:
             "end": end.strftime(PRICE_API_DATETIME_FORMAT),
         }
         try:
-            async with self._session.get(GAS_PRICE_URL, params=params) as resp:
+            async with self._session.get(GAS_PRICE_URL, params=params, timeout=_REQUEST_TIMEOUT) as resp:
                 if resp.status != 200:
                     _LOGGER.warning("Gas price API returned %s", resp.status)
                     return []
@@ -207,7 +211,7 @@ class ElectricityPriceClient:
         }
         try:
             async with self._session.get(
-                ELECTRICITY_PRICE_URL, params=params
+                ELECTRICITY_PRICE_URL, params=params, timeout=_REQUEST_TIMEOUT
             ) as resp:
                 if resp.status != 200:
                     _LOGGER.warning("Electricity price API returned %s", resp.status)
@@ -252,7 +256,7 @@ class OpenMeteoClient:
             "timezone": "UTC",
         }
         try:
-            async with self._session.get(OPEN_METEO_URL, params=params) as resp:
+            async with self._session.get(OPEN_METEO_URL, params=params, timeout=_REQUEST_TIMEOUT) as resp:
                 if resp.status != 200:
                     _LOGGER.warning("Open-Meteo API returned %s", resp.status)
                     return {}

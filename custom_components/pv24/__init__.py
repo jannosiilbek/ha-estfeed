@@ -50,7 +50,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     ]:
         try:
             await coord.async_config_entry_first_refresh()
-        except Exception:
+        except Exception:  # noqa: BLE001 — non-critical; gas sensors load regardless
             _LOGGER.warning("Initial %s fetch failed; will retry on schedule", name)
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
