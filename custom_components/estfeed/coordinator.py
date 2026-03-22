@@ -199,8 +199,17 @@ class EstfeedDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         total_m3 = month_actual_m3 + estimated_m3
         total_kwh = month_actual_kwh + estimated_m3 * calorific
         today_m3 = today_actual_m3
-        if last_actual_dt and last_actual_dt < now and last_actual_dt >= today_start:
-            today_m3 += estimated_m3
+        if last_actual_dt and predicted_daily_m3 > 0 and hourly_profile is not None:
+            # Sum profile weights for gap hours that fall within today
+            gap_hours = max(1, int((now - last_actual_dt).total_seconds() / 3600))
+            today_gap_weight = 0.0
+            for i in range(gap_hours):
+                gap_dt = (last_actual_dt + timedelta(hours=i + 1)).replace(
+                    minute=0, second=0, microsecond=0
+                )
+                if gap_dt >= today_start:
+                    today_gap_weight += hourly_profile[gap_dt.hour]
+            today_m3 += predicted_daily_m3 * today_gap_weight
 
         # Apply apartment area ratio
         apartment_area, building_area = get_area_config(self.config_entry)
