@@ -474,13 +474,17 @@ class GasPriceCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Fetch today's gas exchange price."""
         now = datetime.now(timezone.utc)
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        # Fetch today + yesterday (in case today's price isn't published yet)
+        # Fetch last 7 days — gas prices can lag several days on the exchange
         entries = await self.gas_price_api.get_gas_price(
-            start=today_start - timedelta(days=1),
+            start=today_start - timedelta(days=7),
             end=now,
         )
 
         if not entries:
+            # Exchange may not have published yet (e.g. weekends).
+            # Return last known data if available; only fail on first fetch.
+            if self.data:
+                return self.data
             raise UpdateFailed("No gas price data available")
 
         # Use the most recent price entry

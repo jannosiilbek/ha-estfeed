@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -13,6 +15,8 @@ from .coordinator import (
     EstfeedDataCoordinator,
     GasPriceCoordinator,
 )
+
+_LOGGER = logging.getLogger(__name__)
 
 PLATFORMS = ["sensor"]
 
@@ -34,9 +38,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass, entry, electricity_price_api
     )
 
+    # Main gas coordinator is critical — let it raise ConfigEntryNotReady
     await coordinator.async_config_entry_first_refresh()
-    await gas_price_coordinator.async_config_entry_first_refresh()
-    await electricity_price_coordinator.async_config_entry_first_refresh()
+
+    # Price coordinators are non-critical: if they fail on first refresh,
+    # log and continue — sensors will show unavailable until next update
+    # succeeds, but they won't block the main gas sensors from loading.
+    for name, coord in [
+        ("gas_price", gas_price_coordinator),
+        ("electricity_price", electricity_price_coordinator),
+    ]:
+        try:
+            await coord.async_config_entry_first_refresh()
+        except Exception:
+            _LOGGER.warning("Initial %s fetch failed; will retry on schedule", name)
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
         "coordinator": coordinator,

@@ -90,6 +90,7 @@ GAS_PRICE_SENSORS: tuple[EstfeedSensorDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=4,
         value_fn=lambda data: data["price_eur_kwh"],
+        attr_fn=lambda data: {"price_date": data["price_date"]},
     ),
 )
 
@@ -278,5 +279,15 @@ class GasPriceSensor(CoordinatorEntity[GasPriceCoordinator], SensorEntity):
             return None
         try:
             return self.entity_description.value_fn(self.coordinator.data)
+        except (KeyError, TypeError):
+            return None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Return extra state attributes (price date)."""
+        if self.coordinator.data is None:
+            return None
+        try:
+            return self.entity_description.attr_fn(self.coordinator.data)
         except (KeyError, TypeError):
             return None
