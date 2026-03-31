@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import time
 from datetime import datetime, timezone
 from typing import Any
@@ -18,6 +19,7 @@ from .const import (
     OPEN_METEO_URL,
     PRICE_API_DATETIME_FORMAT,
     TOKEN_URL,
+    WATER_PRICE_URL,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -272,3 +274,68 @@ class OpenMeteoClient:
         except aiohttp.ClientError as err:
             _LOGGER.warning("Failed to fetch weather data: %s", err)
             return {}
+
+
+class WaterPriceClient:
+    """Client for scraping Tallinna Vesi water prices (public, no auth)."""
+
+    def __init__(self, session: aiohttp.ClientSession) -> None:
+        self._session = session
+
+    async def get_water_price(self) -> dict[str, Any]:
+        """Scrape current water + sewage price from Tallinna Vesi website.
+
+        Returns dict with price components in EUR/m³ including VAT.
+        """
+        try:
+            async with self._session.get(
+                WATER_PRICE_URL, timeout=_REQUEST_TIMEOUT
+            ) as resp:
+                if resp.status != 200:
+                    _LOGGER.warning("Tallinna Vesi price page returned %s", resp.status)
+                    return {}
+                html = await resp.text()
+                return self._parse_prices(html)
+        except aiohttp.ClientError as err:
+            _LOGGER.warning("Failed to fetch water price: %s", err)
+            return {}
+
+    @staticmethod
+    def _parse_prices(html: str) -> dict[str, Any]:
+        """Parse water and sewage prices from Tallinna Vesi HTML.
+
+        Finds "total fee for natural persons" (first occurrence = Tallinn & Saue),
+        then extracts the two numbers that follow: price excl. VAT, price incl. VAT.
+        """
+        # Strip HTML tags to plain text lines
+        text = re.sub(r'<[^>]+>', '\n', html)
+        lines = [line.strip() for line in text.split('\n') if line.strip()]
+
+        total_price = None
+        for i, line in enumerate(lines):
+            if 'total fee for natural persons' in line.lower():
+                # Next two numbers are: excl. VAT, incl. VAT
+                prices_found = []
+                for j in range(i + 1, min(i + 10, len(lines))):
+                    try:
+                        val = float(lines[j].replace(',', '.'))
+                        if 0.5 < val < 20.0:
+                            prices_found.append(val)
+                    except ValueError:
+                        continue
+                    if len(prices_found) >= 2:
+                        break
+                if len(prices_found) >= 2:
+                    total_price = prices_found[1]  # Second = incl. VAT
+                elif prices_found:
+                    total_price = prices_found[0]
+                break  # Use first occurrence (Tallinn & Saue section)
+
+        if total_price is None:
+            return {}
+
+        return {
+            "total_price_eur_m3": round(total_price, 2),
+            "water_price_eur_m3": None,
+            "sewage_price_eur_m3": None,
+        }

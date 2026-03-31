@@ -23,6 +23,9 @@ OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
 GAS_PRICE_URL = "https://dashboard.elering.ee/api/gas-trade"
 ELECTRICITY_PRICE_URL = "https://dashboard.elering.ee/api/nps/price"
 ELECTRICITY_PRICE_UPDATE_INTERVAL = 900  # 15 minutes — matches price block resolution
+WATER_PRICE_UPDATE_INTERVAL = 86400  # 24 hours — regulated prices change rarely
+
+WATER_PRICE_URL = "https://tallinnavesi.ee/en/customers-2/paying-bills/price-lists-for-water-and-sewerage-services/"
 
 API_DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 PRICE_API_DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%S.000Z"

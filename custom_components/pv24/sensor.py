@@ -27,6 +27,7 @@ from .coordinator import (
     ElectricityPriceCoordinator,
     EstfeedDataCoordinator,
     GasPriceCoordinator,
+    WaterPriceCoordinator,
 )
 
 
@@ -82,6 +83,21 @@ ELECTRICITY_PRICE_SENSORS: tuple[EstfeedSensorDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=4,
         value_fn=lambda data: data["next_hour_eur_kwh"],
+    ),
+)
+
+WATER_PRICE_SENSORS: tuple[EstfeedSensorDescription, ...] = (
+    EstfeedSensorDescription(
+        key="water_price",
+        translation_key="water_price",
+        native_unit_of_measurement="EUR/m³",
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
+        value_fn=lambda data: data["water_price_eur_m3"],
+        attr_fn=lambda data: {
+            "water_supply_eur_m3": data.get("water_supply_eur_m3"),
+            "sewage_eur_m3": data.get("sewage_eur_m3"),
+        },
     ),
 )
 
@@ -171,6 +187,7 @@ async def async_setup_entry(
     coordinator: EstfeedDataCoordinator = data["coordinator"]
     gas_price_coordinator: GasPriceCoordinator = data["gas_price_coordinator"]
     elec_price_coordinator: ElectricityPriceCoordinator = data["electricity_price_coordinator"]
+    water_price_coordinator: WaterPriceCoordinator = data["water_price_coordinator"]
 
     entities: list[SensorEntity] = [
         EstfeedSensor(coordinator, entry, desc) for desc in SENSORS
@@ -192,6 +209,15 @@ async def async_setup_entry(
             device_model="Nord Pool EE",
         )
         for desc in ELECTRICITY_PRICE_SENSORS
+    )
+    entities.extend(
+        PriceSensor(
+            water_price_coordinator, entry, desc,
+            device_id_suffix="water_price",
+            device_name="Water Price",
+            device_model="Tallinna Vesi",
+        )
+        for desc in WATER_PRICE_SENSORS
     )
     async_add_entities(entities)
 

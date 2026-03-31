@@ -18,6 +18,7 @@ from .api import (
     EstfeedAuthError,
     GasPriceClient,
     OpenMeteoClient,
+    WaterPriceClient,
 )
 from .const import (
     DEFAULT_CALORIFIC_KWH_M3,
@@ -27,6 +28,7 @@ from .const import (
     GAS_PRICE_UPDATE_INTERVAL,
     MIN_COMPLETE_DAY_HOURS,
     THERMAL_WEIGHTS,
+    WATER_PRICE_UPDATE_INTERVAL,
     get_area_config,
 )
 
@@ -608,4 +610,40 @@ class ElectricityPriceCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "next_hour_eur_kwh": round(next_hour_price / 1000, 6) if next_hour_price is not None else None,
             "prices_today": _format_entries(today_entries),
             "prices_tomorrow": _format_entries(tomorrow_entries),
+        }
+
+
+class WaterPriceCoordinator(DataUpdateCoordinator[dict[str, Any]]):
+    """Coordinator to fetch Tallinna Vesi water+sewage price."""
+
+    config_entry: ConfigEntry
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        config_entry: ConfigEntry,
+        water_price_api: WaterPriceClient,
+    ) -> None:
+        super().__init__(
+            hass,
+            _LOGGER,
+            name=f"{DOMAIN}_water_price",
+            config_entry=config_entry,
+            update_interval=timedelta(seconds=WATER_PRICE_UPDATE_INTERVAL),
+        )
+        self.water_price_api = water_price_api
+
+    async def _async_update_data(self) -> dict[str, Any]:
+        """Fetch current water price from Tallinna Vesi."""
+        prices = await self.water_price_api.get_water_price()
+
+        if not prices or not prices.get("total_price_eur_m3"):
+            if self.data:
+                return self.data
+            raise UpdateFailed("No water price data available")
+
+        return {
+            "water_price_eur_m3": prices["total_price_eur_m3"],
+            "water_supply_eur_m3": prices.get("water_price_eur_m3"),
+            "sewage_eur_m3": prices.get("sewage_price_eur_m3"),
         }
